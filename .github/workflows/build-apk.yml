@@ -39,13 +39,13 @@ jobs:
           cd /tmp/dnstt/dnstt-client
           GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libdnstt.so
 
-          # 2. Build BadVPN tun2socks dengan flag C kompatibel NDK 26
+          # 2. Build BadVPN tun2socks dengan makro backend Linux/Android (epoll + signalfd)
           git clone https://github.com/ambrop72/badvpn.git /tmp/badvpn
           mkdir -p /tmp/badvpn/build && cd /tmp/badvpn/build
           cmake .. \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/26.1.10909125/build/cmake/android.toolchain.cmake \
-            -DCMAKE_C_FLAGS="-w -Wno-implicit-function-declaration -Wno-incompatible-function-pointer-types -Wno-int-conversion" \
+            -DCMAKE_C_FLAGS="-w -DBADVPN_THREADWORK_USE_PTHREAD -DBADVPN_LINUX -DBADVPN_BREACTOR_BADVPN -DBADVPN_USE_EPOLL -DBADVPN_USE_SIGNALFD -DBADVPN_LITTLE_ENDIAN" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-24 \
             -DBUILD_NOTHING_BY_DEFAULT=1 \
