@@ -2,12 +2,14 @@ package com.custom.tunnel
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.BufferedReader
@@ -15,14 +17,17 @@ import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
+import java.util.concurrent.TimeUnit
 
 class TunnelVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var vpnInterface: ParcelFileDescriptor? = null
     private var coreProcess: Process? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
+        @Volatile
         var isRunning = false
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
@@ -34,6 +39,10 @@ class TunnelVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
+        if (isRunning) {
+            return START_STICKY
+        }
+
         val dnsType = intent?.getStringExtra("dnsType") ?: "NULL"
         val dns = intent?.getStringExtra("dns") ?: "1.1.1.1"
         val ns = intent?.getStringExtra("ns") ?: ""
@@ -42,6 +51,7 @@ class TunnelVpnService : VpnService() {
         val user = intent?.getStringExtra("user") ?: ""
         val pass = intent?.getStringExtra("pass") ?: ""
 
+        acquireWakeLock()
         startForegroundNotification()
         isRunning = true
 
@@ -108,7 +118,7 @@ class TunnelVpnService : VpnService() {
 
             val builder = Builder()
                 .setSession("Custom Tunnel VPN")
-                .setMtu(1500)
+                .setMtu(1400)
                 .addAddress("10.0.0.2", 24)
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer("8.8.8.8")
@@ -126,7 +136,7 @@ class TunnelVpnService : VpnService() {
             }
 
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
-            TunnelLogger.log("DNS lewat terowongan aktif", "#81C784")
+            TunnelLogger.log("DNS Cache & Terowongan aktif", "#81C784")
             TunnelLogger.log("Profiles: Berhasil terhubung", "#00E676")
             TunnelLogger.log("Selamat berselancar", "#00E676")
 
@@ -142,7 +152,7 @@ class TunnelVpnService : VpnService() {
         serviceScope.launch {
             val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
             while (isRunning) {
-                delay(5000)
+                delay(10000)
                 try {
                     val start = System.currentTimeMillis()
                     Socket(socksProxy).use { socket ->
@@ -157,14 +167,50 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CustomTunnel::VpnWakeLock").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+            wakeLock = null
+        } catch (_: Exception) {}
+    }
+
+    @Synchronized
     private fun stopTunnel() {
         if (!isRunning) return
         isRunning = false
-        try { coreProcess?.destroy() } catch (_: Exception) {}
+        try {
+            coreProcess?.destroy()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (coreProcess?.waitFor(400, TimeUnit.MILLISECONDS) == false) {
+                    coreProcess?.destroyForcibly()
+                }
+            }
+        } catch (_: Exception) {}
+        coreProcess = null
+
         try { vpnInterface?.close() } catch (_: Exception) {}
+        vpnInterface = null
+
+        releaseWakeLock()
         TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    override fun onRevoke() {
+        TunnelLogger.log("Izin VPN dicabut oleh sistem.", "#EF5350")
+        stopTunnel()
+        super.onRevoke()
     }
 
     private fun startForegroundNotification() {

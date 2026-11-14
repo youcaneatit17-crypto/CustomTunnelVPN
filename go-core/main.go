@@ -12,11 +12,82 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
+
+type closeWriter interface {
+	CloseWrite() error
+}
+
+type idleTimeoutConn struct {
+	net.Conn
+	timeout time.Duration
+}
+
+func (c *idleTimeoutConn) Read(b []byte) (int, error) {
+	_ = c.Conn.SetDeadline(time.Now().Add(c.timeout))
+	return c.Conn.Read(b)
+}
+
+func (c *idleTimeoutConn) Write(b []byte) (int, error) {
+	_ = c.Conn.SetDeadline(time.Now().Add(c.timeout))
+	return c.Conn.Write(b)
+}
+
+type dnsCacheEntry struct {
+	packet    []byte
+	expiresAt time.Time
+}
+
+type dnsCache struct {
+	mu      sync.RWMutex
+	entries map[string]dnsCacheEntry
+}
+
+func newDNSCache() *dnsCache {
+	return &dnsCache{entries: make(map[string]dnsCacheEntry)}
+}
+
+func (c *dnsCache) get(query []byte) ([]byte, bool) {
+	if len(query) <= 12 {
+		return nil, false
+	}
+	key := string(query[12:])
+	c.mu.RLock()
+	entry, ok := c.entries[key]
+	c.mu.RUnlock()
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	resp := make([]byte, len(entry.packet))
+	copy(resp, entry.packet)
+	resp[0] = query[0]
+	resp[1] = query[1]
+	return resp, true
+}
+
+func (c *dnsCache) set(query, resp []byte, ttl time.Duration) {
+	if len(query) <= 12 || len(resp) <= 12 {
+		return
+	}
+	key := string(query[12:])
+	stored := make([]byte, len(resp))
+	copy(stored, resp)
+
+	c.mu.Lock()
+	if len(c.entries) > 500 {
+		c.entries = make(map[string]dnsCacheEntry)
+	}
+	c.entries[key] = dnsCacheEntry{
+		packet:    stored,
+		expiresAt: time.Now().Add(ttl),
+	}
+	c.mu.Unlock()
+}
 
 func getFreeLocalAddr() (string, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -68,14 +139,14 @@ func parseSocksAddr(r io.Reader) (host string, port int, err error) {
 		return "", 0, err
 	}
 	switch atypBuf[0] {
-	case 0x01: // IPv4
+	case 0x01:
 		buf := make([]byte, 6)
 		if _, err = io.ReadFull(r, buf); err != nil {
 			return "", 0, err
 		}
 		host = net.IP(buf[:4]).String()
 		port = int(binary.BigEndian.Uint16(buf[4:6]))
-	case 0x03: // Domain
+	case 0x03:
 		lenBuf := make([]byte, 1)
 		if _, err = io.ReadFull(r, lenBuf); err != nil {
 			return "", 0, err
@@ -87,7 +158,7 @@ func parseSocksAddr(r io.Reader) (host string, port int, err error) {
 		}
 		host = string(buf[:dLen])
 		port = int(binary.BigEndian.Uint16(buf[dLen : dLen+2]))
-	case 0x04: // IPv6
+	case 0x04:
 		buf := make([]byte, 18)
 		if _, err = io.ReadFull(r, buf); err != nil {
 			return "", 0, err
@@ -138,13 +209,38 @@ func parseSocksUDPPacket(pkt []byte) (host string, port int, header []byte, payl
 	return host, port, pkt[:idx], pkt[idx:], true
 }
 
-func forwardDNSOverTCP(sshClient *ssh.Client, dstHost string, query []byte) ([]byte, error) {
-	conn, err := sshClient.Dial("tcp", net.JoinHostPort(dstHost, "53"))
+func dialSSHWithTimeout(sshClient *ssh.Client, network, addr string, timeout time.Duration) (net.Conn, error) {
+	type dialRes struct {
+		conn net.Conn
+		err  error
+	}
+	ch := make(chan dialRes, 1)
+	go func() {
+		c, e := sshClient.Dial(network, addr)
+		ch <- dialRes{c, e}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.conn, res.err
+	case <-time.After(timeout):
+		go func() {
+			res := <-ch
+			if res.conn != nil {
+				_ = res.conn.Close()
+			}
+		}()
+		return nil, fmt.Errorf("dial timeout")
+	}
+}
+
+func queryDNSOnce(sshClient *ssh.Client, serverIP string, query []byte) ([]byte, error) {
+	conn, err := dialSSHWithTimeout(sshClient, "tcp", net.JoinHostPort(serverIP, "53"), 8*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
 
 	req := make([]byte, 2+len(query))
 	binary.BigEndian.PutUint16(req[:2], uint16(len(query)))
@@ -159,6 +255,9 @@ func forwardDNSOverTCP(sshClient *ssh.Client, dstHost string, query []byte) ([]b
 		return nil, err
 	}
 	respLen := int(binary.BigEndian.Uint16(lenBuf))
+	if respLen <= 0 || respLen > 4096 {
+		return nil, fmt.Errorf("invalid dns length")
+	}
 	resp := make([]byte, respLen)
 	if _, err := io.ReadFull(conn, resp); err != nil {
 		return nil, err
@@ -166,8 +265,58 @@ func forwardDNSOverTCP(sshClient *ssh.Client, dstHost string, query []byte) ([]b
 	return resp, nil
 }
 
-func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client) {
+func resolveDNS(sshClient *ssh.Client, cache *dnsCache, dstHost string, query []byte) ([]byte, error) {
+	if cached, ok := cache.get(query); ok {
+		return cached, nil
+	}
+
+	resp, err := queryDNSOnce(sshClient, dstHost, query)
+	if err != nil {
+		fallback := "1.1.1.1"
+		if dstHost == "1.1.1.1" {
+			fallback = "8.8.8.8"
+		}
+		resp, err = queryDNSOnce(sshClient, fallback, query)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cache.set(query, resp, 120*time.Second)
+	return resp, nil
+}
+
+func relayBidirectional(localConn, remoteConn net.Conn) {
+	c1 := &idleTimeoutConn{Conn: localConn, timeout: 90 * time.Second}
+	c2 := &idleTimeoutConn{Conn: remoteConn, timeout: 90 * time.Second}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(c2, c1)
+		if cw, ok := remoteConn.(closeWriter); ok {
+			_ = cw.CloseWrite()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(c1, c2)
+		if cw, ok := localConn.(closeWriter); ok {
+			_ = cw.CloseWrite()
+		}
+	}()
+
+	wg.Wait()
+}
+
+func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client, cache *dnsCache, dialSem chan struct{}) {
 	defer clientConn.Close()
+	if tcpConn, ok := clientConn.(*net.TCPConn); ok {
+		_ = tcpConn.SetNoDelay(true)
+	}
 
 	hdr := make([]byte, 2)
 	if _, err := io.ReadFull(clientConn, hdr); err != nil || hdr[0] != 0x05 {
@@ -191,22 +340,28 @@ func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client) {
 
 	switch cmd {
 	case 0x01: // TCP CONNECT
+		select {
+		case dialSem <- struct{}{}:
+		case <-time.After(10 * time.Second):
+			_, _ = clientConn.Write([]byte{0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+			return
+		}
+
 		target := net.JoinHostPort(host, strconv.Itoa(port))
-		remoteConn, err := sshClient.Dial("tcp", target)
+		remoteConn, err := dialSSHWithTimeout(sshClient, "tcp", target, 15*time.Second)
+		<-dialSem
 		if err != nil {
 			_, _ = clientConn.Write([]byte{0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 			return
 		}
 		defer remoteConn.Close()
-		_, _ = clientConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 
-		go func() {
-			_, _ = io.Copy(remoteConn, clientConn)
-			_ = remoteConn.Close()
-		}()
-		_, _ = io.Copy(clientConn, remoteConn)
+		if _, err := clientConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+			return
+		}
+		relayBidirectional(clientConn, remoteConn)
 
-	case 0x03: // UDP ASSOCIATE (DNS-over-TCP relay)
+	case 0x03: // UDP ASSOCIATE (Cached DNS-over-TCP relay)
 		udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 		if err != nil {
 			_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -240,7 +395,7 @@ func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client) {
 				}
 
 				go func(addr *net.UDPAddr, h string, sh []byte, q []byte) {
-					dnsResp, err := forwardDNSOverTCP(sshClient, h, q)
+					dnsResp, err := resolveDNS(sshClient, cache, h, q)
 					if err != nil {
 						return
 					}
@@ -277,7 +432,9 @@ func main() {
 	log.SetFlags(0)
 
 	targetDialAddr := *sshAddr
+	var procMu sync.Mutex
 	var dnsttCmd *exec.Cmd
+	var tunCmd *exec.Cmd
 
 	if strings.HasPrefix(*sshAddr, "127.0.0.1:") || strings.HasPrefix(*sshAddr, "localhost:") {
 		freeAddr, err := getFreeLocalAddr()
@@ -336,19 +493,29 @@ func main() {
 		log.Fatalf("[SSH] Gagal terhubung: %v", err)
 	}
 	defer sshClient.Close()
-	log.Println("[SSH] Tersambung! Membuka SOCKS5 + DNS-over-TCP...")
+	log.Println("[SSH] Tersambung! Membuka SOCKS5 + Cached DNS...")
 
+	// Keepalive toleran: hanya putus jika 3x berturut-turut gagal
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+		missed := 0
 		for range ticker.C {
 			_, _, err := sshClient.SendRequest("keepalive@openssh.com", true, nil)
 			if err != nil {
-				log.Printf("[SSH] Koneksi terputus: %v", err)
-				os.Exit(1)
+				missed++
+				if missed >= 3 {
+					log.Printf("[SSH] Koneksi terputus setelah 3x retry: %v", err)
+					os.Exit(1)
+				}
+			} else {
+				missed = 0
 			}
 		}
 	}()
+
+	cache := newDNSCache()
+	dialSem := make(chan struct{}, 24)
 
 	socksListener, err := net.Listen("tcp", *socksAddr)
 	if err != nil {
@@ -360,7 +527,7 @@ func main() {
 			if err != nil {
 				return
 			}
-			go handleSocksConn(conn, sshClient)
+			go handleSocksConn(conn, sshClient, cache, dialSem)
 		}
 	}()
 
@@ -372,7 +539,6 @@ func main() {
 		}
 	}
 
-	var tunCmd *exec.Cmd
 	if tunListener != nil {
 		go func() {
 			tunFd, err := acceptTunFd(tunListener)
@@ -383,16 +549,19 @@ func main() {
 			tunFile := os.NewFile(uintptr(tunFd), "tun0")
 			defer tunFile.Close()
 
-			tunCmd = exec.Command(*tunBin, "--device", "fd://3", "--proxy", "socks5://"+*socksAddr, "--mtu", "1500", "--loglevel", "warn")
-			tunCmd.ExtraFiles = []*os.File{tunFile}
-			tunCmd.Stdout = os.Stdout
-			tunCmd.Stderr = os.Stderr
-			if err := tunCmd.Start(); err != nil {
+			cmd := exec.Command(*tunBin, "--device", "fd://3", "--proxy", "socks5://"+*socksAddr, "--mtu", "1400", "--loglevel", "error")
+			cmd.ExtraFiles = []*os.File{tunFile}
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Start(); err != nil {
 				log.Printf("[TUN] Gagal menjalankan tun2socks: %v", err)
 				return
 			}
-			log.Println("[TUN] Engine tun2socks aktif (FD 3 O_RDWR)")
-			tunCmd.Wait()
+			procMu.Lock()
+			tunCmd = cmd
+			procMu.Unlock()
+			log.Println("[TUN] Engine tun2socks aktif (FD 3, MTU 1400)")
+			_ = cmd.Wait()
 		}()
 	}
 
@@ -403,10 +572,12 @@ func main() {
 
 	<-sigCh
 	_ = socksListener.Close()
+	procMu.Lock()
 	if tunCmd != nil && tunCmd.Process != nil {
 		_ = tunCmd.Process.Kill()
 	}
 	if dnsttCmd != nil && dnsttCmd.Process != nil {
 		_ = dnsttCmd.Process.Kill()
 	}
+	procMu.Unlock()
 }

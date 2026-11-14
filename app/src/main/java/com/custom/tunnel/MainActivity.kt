@@ -6,6 +6,8 @@ import android.graphics.Color
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Html
 import android.view.View
 import android.view.ViewGroup
@@ -36,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabLayout: TabLayout
 
     private val dnsTypes = arrayOf("NULL", "AUTO", "TXT")
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private var logRenderPending = false
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -84,7 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         loadSavedConfig()
         updateButtonState()
-        tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
+        renderLogsNow()
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
@@ -94,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     layoutUtama.visibility = View.GONE
                     layoutLog.visibility = View.VISIBLE
+                    renderLogsNow()
                 }
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
@@ -101,10 +106,15 @@ class MainActivity : AppCompatActivity() {
         })
 
         TunnelLogger.onLogUpdated = {
-            runOnUiThread {
-                tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
-                layoutLog.post { layoutLog.fullScroll(View.FOCUS_DOWN) }
+            uiHandler.post {
                 updateButtonState()
+                if (!logRenderPending) {
+                    logRenderPending = true
+                    uiHandler.postDelayed({
+                        logRenderPending = false
+                        renderLogsNow()
+                    }, 200)
+                }
             }
         }
 
@@ -124,8 +134,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderLogsNow() {
+        tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
+        layoutLog.post { layoutLog.fullScroll(View.FOCUS_DOWN) }
+    }
+
     override fun onDestroy() {
         TunnelLogger.onLogUpdated = null
+        uiHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
