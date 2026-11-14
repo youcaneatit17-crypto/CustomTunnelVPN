@@ -18,16 +18,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Go (for Modern SSH Core)
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: false
-
-      - name: Setup Android SDK & NDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'ndk;26.1.10909125'
 
       - name: Compile Native Binaries (libsshcore.so & libtun2socks.so, preserve 1FTunnel libdnstt.so)
         run: |
@@ -39,21 +34,10 @@ jobs:
           go mod tidy
           GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libsshcore.so
 
-          # 2. Build BadVPN tun2socks (libtun2socks.so)
-          git clone https://github.com/ambrop72/badvpn.git /tmp/badvpn
-          cd /tmp/badvpn
-          find . -name "CMakeLists.txt" -exec sed -i 's/\bpthread\b//g; s/\brt\b//g' {} +
-          mkdir -p /tmp/badvpn/build && cd /tmp/badvpn/build
-          cmake .. \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/26.1.10909125/build/cmake/android.toolchain.cmake \
-            -DCMAKE_C_FLAGS="-w -DBADVPN_THREADWORK_USE_PTHREAD -DBADVPN_LINUX -DBADVPN_BREACTOR_BADVPN -DBADVPN_USE_EPOLL -DBADVPN_USE_SIGNALFD -DBADVPN_LITTLE_ENDIAN" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-24 \
-            -DBUILD_NOTHING_BY_DEFAULT=1 \
-            -DBUILD_TUN2SOCKS=1
-          make -j$(nproc)
-          cp tun2socks/badvpn-tun2socks $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libtun2socks.so
+          # 2. Build xjasonlyu/tun2socks (mendukung -device fd:// secara native di Android)
+          git clone --depth 1 https://github.com/xjasonlyu/tun2socks.git /tmp/tun2socks
+          cd /tmp/tun2socks
+          GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libtun2socks.so
 
       - name: Generate Gradle Wrapper & Build Debug APK
         run: |

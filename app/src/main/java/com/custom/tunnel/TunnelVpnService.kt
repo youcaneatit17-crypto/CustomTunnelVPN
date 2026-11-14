@@ -36,7 +36,7 @@ class TunnelVpnService : VpnService() {
         val dns = intent?.getStringExtra("dns") ?: "1.1.1.1"
         val ns = intent?.getStringExtra("ns") ?: ""
         val pubkey = intent?.getStringExtra("pubkey") ?: ""
-        val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:109"
+        val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:22"
         val user = intent?.getStringExtra("user") ?: ""
         val pass = intent?.getStringExtra("pass") ?: ""
         val udpgw = intent?.getStringExtra("udpgw") ?: "7300"
@@ -109,22 +109,20 @@ class TunnelVpnService : VpnService() {
                 .addAddress("10.0.0.2", 24)
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer("8.8.8.8")
+                .addDnsServer("1.1.1.1")
                 .addDisallowedApplication(packageName)
 
             vpnInterface = builder.establish()
             val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
 
-            // Jalankan BadVPN tun2socks
-            TunnelLogger.log("Mesin SOCKS aktif: BadVPN (UDPGW: $udpgw)", "#81C784")
+            // Jalankan tun2socks modern dengan dukungan native fd://
+            TunnelLogger.log("Mesin TUN aktif: Go tun2socks (fd://$tunFd)", "#81C784")
             val tunCmd = arrayOf(
                 "$nativeDir/libtun2socks.so",
-                "--netif-ipaddr", "10.0.0.1",
-                "--netif-netmask", "255.255.255.0",
-                "--socks-server-addr", "127.0.0.1:$localSocksPort",
-                "--tunfd", tunFd.toString(),
-                "--tunmtu", "1500",
-                "--loglevel", "3",
-                "--udpgw-remote-server-addr", "127.0.0.1:$udpgw"
+                "-device", "fd://$tunFd",
+                "-proxy", "socks5://127.0.0.1:$localSocksPort",
+                "-mtu", "1500",
+                "-loglevel", "warning"
             )
             tun2SocksProcess = ProcessBuilder(*tunCmd).redirectErrorStream(true).start()
             monitorProcessOutput(tun2SocksProcess!!, "TUN")
@@ -194,7 +192,7 @@ class TunnelVpnService : VpnService() {
         }
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Custom Tunnel Aktif")
-            .setContentText("Go SSH + SlowDNS + BadVPN berjalan")
+            .setContentText("Go SSH + SlowDNS + TUN berjalan")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .build()
         startForeground(1, notification)
