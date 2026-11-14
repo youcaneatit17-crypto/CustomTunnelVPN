@@ -3,33 +3,30 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121417"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"
+    android:background="#121417">
 
-    <LinearLayout
+    <TextView
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:background="#1B1E23"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="16dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Custom Tunnel"
-            android:textColor="#FFA726"
-            android:textSize="19sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+        android:layout_height="wrap_content"
+        android:text="Custom Tunnel"
+        android:textColor="#FFB74D"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="10dp" />
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:background="#1B1E23"
-        app:tabIndicatorColor="#42A5F5"
+        android:layout_height="wrap_content"
+        android:background="#121417"
+        app:tabTextColor="#8E9297"
         app:tabSelectedTextColor="#FFFFFF"
-        app:tabTextColor="#8E96A0">
+        app:tabIndicatorColor="#64B5F6">
 
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
@@ -42,11 +39,11 @@
             android:text="Log" />
     </com.google.android.material.tabs.TabLayout>
 
+    <!-- TAB 1: UTAMA -->
     <ScrollView
         android:id="@+id/layoutUtama"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:padding="16dp">
 
         <LinearLayout
@@ -58,112 +55,118 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="KONFIGURASI SLOWDNS"
-                android:textColor="#42A5F5"
+                android:textColor="#64B5F6"
+                android:textStyle="bold"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:layout_marginBottom="8dp" />
 
             <EditText
-                android:id="@+id/etDnsResolver"
+                android:id="@+id/etDns"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
                 android:hint="DNS Resolver (contoh: 8.8.8.8)"
-                android:padding="12dp"
                 android:text="8.8.8.8"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
-
-            <EditText
-                android:id="@+id/etNameserver"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
-                android:hint="Nameserver (NS Domain)"
+                android:textColorHint="#757575"
+                android:background="#1E2126"
                 android:padding="12dp"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
+                android:layout_marginBottom="10dp" />
 
             <EditText
-                android:id="@+id/etPublicKey"
+                android:id="@+id/etNs"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
+                android:hint="Nameserver (NS)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="10dp" />
+
+            <EditText
+                android:id="@+id/etPubkey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:hint="SlowDNS Public Key (Hex)"
-                android:padding="12dp"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="16dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
                 android:text="AKUN SSH &amp; BADVPN"
-                android:textColor="#42A5F5"
+                android:textColor="#64B5F6"
+                android:textStyle="bold"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/etSshHostPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="SSH Host:Port (contoh: 127.0.0.1:109)"
+                android:text="127.0.0.1:109"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="10dp" />
 
             <EditText
                 android:id="@+id/etSshUser"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
                 android:hint="Username SSH"
-                android:padding="12dp"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="10dp" />
 
             <EditText
                 android:id="@+id/etSshPass"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
                 android:hint="Password SSH"
                 android:inputType="textPassword"
-                android:padding="12dp"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="10dp" />
 
             <EditText
-                android:id="@+id/etUdpGwPort"
+                android:id="@+id/etUdpgw"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2229"
                 android:hint="Port BadVPN UDPGW (default: 7300)"
-                android:inputType="number"
-                android:padding="12dp"
                 android:text="7300"
+                android:inputType="number"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#6C757D"
-                android:textSize="14sp" />
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
+                android:layout_marginBottom="20dp" />
 
             <Button
                 android:id="@+id/btnConnect"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="20dp"
-                android:backgroundTint="#2E7D32"
                 android:text="HUBUNGKAN"
+                android:textStyle="bold"
                 android:textColor="#FFFFFF"
-                android:textStyle="bold" />
+                android:backgroundTint="#2E7D32" />
         </LinearLayout>
     </ScrollView>
 
+    <!-- TAB 2: LOG -->
     <ScrollView
         android:id="@+id/layoutLog"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:padding="12dp"
         android:visibility="gone">
 
@@ -172,8 +175,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
+            android:textSize="12sp"
             android:lineSpacingExtra="4dp"
-            android:textColor="#D0D7DE"
-            android:textSize="12sp" />
+            android:textColor="#E0E0E0" />
     </ScrollView>
+
 </LinearLayout>

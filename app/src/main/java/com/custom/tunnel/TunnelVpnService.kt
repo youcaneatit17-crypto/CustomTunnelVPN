@@ -42,6 +42,7 @@ class TunnelVpnService : VpnService() {
         val dns = intent?.getStringExtra("dns") ?: "8.8.8.8"
         val ns = intent?.getStringExtra("ns") ?: ""
         val pubkey = intent?.getStringExtra("pubkey") ?: ""
+        val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:109"
         val user = intent?.getStringExtra("user") ?: ""
         val pass = intent?.getStringExtra("pass") ?: ""
         val udpgw = intent?.getStringExtra("udpgw") ?: "7300"
@@ -50,7 +51,7 @@ class TunnelVpnService : VpnService() {
         isRunning = true
 
         serviceScope.launch {
-            startTunnelSequence(dns, ns, pubkey, user, pass, udpgw)
+            startTunnelSequence(dns, ns, pubkey, sshHostPort, user, pass, udpgw)
         }
 
         return START_STICKY
@@ -58,35 +59,46 @@ class TunnelVpnService : VpnService() {
 
     private suspend fun startTunnelSequence(
         dns: String, ns: String, pubkey: String,
-        user: String, pass: String, udpgw: String
+        sshHostPort: String, user: String, pass: String, udpgw: String
     ) {
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
-            val localSshPort = 2222
+            val parts = sshHostPort.split(":")
+            val sshHost = parts.getOrNull(0)?.ifBlank { "127.0.0.1" } ?: "127.0.0.1"
+            val sshPort = parts.getOrNull(1)?.toIntOrNull() ?: 109
             val localSocksPort = 1080
 
-            // 1. Jalankan SlowDNS (libdnstt.so)
+            // 1. Jalankan SlowDNS (libdnstt.so) ke local address sesuai SSH Host:Port
             TunnelLogger.log("[ss] SlowDNS: Memulai...", "#64B5F6")
             TunnelLogger.log("[ss] SlowDNS: Menghubungkan ke server ($ns)", "#64B5F6")
+
+            val dnsttListenAddr = if (sshHost == "127.0.0.1" || sshHost == "localhost") {
+                "127.0.0.1:$sshPort"
+            } else {
+                "127.0.0.1:2222"
+            }
 
             val dnsttCmd = arrayOf(
                 "$nativeDir/libdnstt.so",
                 "-udp", "$dns:53",
                 "-pubkey", pubkey,
                 ns,
-                "127.0.0.1:$localSshPort"
+                dnsttListenAddr
             )
             slowDnsProcess = ProcessBuilder(*dnsttCmd).redirectErrorStream(true).start()
             monitorProcessOutput(slowDnsProcess!!, "SlowDNS")
 
-            delay(1500)
+            delay(2000)
 
-            // 2. Hubungkan SSH-2 via Terowongan SlowDNS (127.0.0.1:2222)
-            TunnelLogger.log("[ss] Menginisialisasi SSH...", "#64B5F6")
+            // 2. Hubungkan SSH-2 ke SSH Host:Port (kexTimeout diperpanjang jadi 45000 ms)
+            val targetHost = if (sshHost == "127.0.0.1" || sshHost == "localhost") "127.0.0.1" else sshHost
+            val targetPort = if (sshHost == "127.0.0.1" || sshHost == "localhost") sshPort else sshPort
+
+            TunnelLogger.log("[ss] Menginisialisasi SSH ($targetHost:$targetPort)...", "#64B5F6")
             TunnelLogger.log("[ss] Memulai core SSH-2", "#64B5F6")
 
-            val conn = Connection("127.0.0.1", localSshPort)
-            conn.connect(null, 15000, 15000)
+            val conn = Connection(targetHost, targetPort)
+            conn.connect(null, 45000, 45000)
             val isAuthenticated = conn.authenticateWithPassword(user, pass)
             if (!isAuthenticated) {
                 throw IllegalStateException("Autentikasi SSH gagal (Username/Password salah)")
@@ -161,7 +173,6 @@ class TunnelVpnService : VpnService() {
             val input = DataInputStream(client.getInputStream())
             val output = client.getOutputStream()
 
-            // SOCKS5 Handshake
             val ver = input.readByte().toInt()
             if (ver != 5) { client.close(); return@withContext }
             val nMethods = input.readUnsignedByte()
@@ -170,10 +181,9 @@ class TunnelVpnService : VpnService() {
             output.write(byteArrayOf(0x05, 0x00))
             output.flush()
 
-            // SOCKS5 Request
-            input.readByte() // ver
+            input.readByte()
             val cmd = input.readByte().toInt()
-            input.readByte() // rsv
+            input.readByte()
             val atyp = input.readByte().toInt()
 
             val destHost: String = when (atyp) {
@@ -203,11 +213,10 @@ class TunnelVpnService : VpnService() {
                 return@withContext
             }
 
-            // Alokasikan port bebas dan buat Trilead LocalPortForwarder
             val freePort = findFreeLocalPort()
             lpf = conn.createLocalPortForwarder(freePort, destHost, destPort)
             forwardSocket = Socket()
-            forwardSocket.connect(InetSocketAddress("127.0.0.1", freePort), 10000)
+            forwardSocket.connect(InetSocketAddress("127.0.0.1", freePort), 15000)
 
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
