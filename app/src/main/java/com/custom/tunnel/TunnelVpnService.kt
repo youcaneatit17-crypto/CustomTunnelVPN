@@ -6,9 +6,12 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.BufferedReader
+import java.io.FileDescriptor
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -113,16 +116,22 @@ class TunnelVpnService : VpnService() {
                 .addDisallowedApplication(packageName)
 
             vpnInterface = builder.establish()
-            val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
+            val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
+            val rawFd: FileDescriptor = pfd.fileDescriptor
 
-            // Jalankan tun2socks modern dengan dukungan native fd://
+            // Hapus flag FD_CLOEXEC agar file descriptor tun0 tetap terbuka untuk proses libtun2socks.so
+            val flags = Os.fcntlInt(rawFd, OsConstants.F_GETFD, 0)
+            Os.fcntlInt(rawFd, OsConstants.F_SETFD, flags and OsConstants.FD_CLOEXEC.inv())
+            val tunFd = pfd.fd
+
+            // Jalankan xjasonlyu/tun2socks dengan flag panjang (--) yang benar
             TunnelLogger.log("Mesin TUN aktif: Go tun2socks (fd://$tunFd)", "#81C784")
             val tunCmd = arrayOf(
                 "$nativeDir/libtun2socks.so",
-                "-device", "fd://$tunFd",
-                "-proxy", "socks5://127.0.0.1:$localSocksPort",
-                "-mtu", "1500",
-                "-loglevel", "warning"
+                "--device", "fd://$tunFd",
+                "--proxy", "socks5://127.0.0.1:$localSocksPort",
+                "--mtu", "1500",
+                "--loglevel", "warn"
             )
             tun2SocksProcess = ProcessBuilder(*tunCmd).redirectErrorStream(true).start()
             monitorProcessOutput(tun2SocksProcess!!, "TUN")
