@@ -55,7 +55,6 @@ class TunnelVpnService : VpnService() {
     companion object {
         @Volatile
         var isRunning = false
-        connectionState = STATE_DISCONNECTED
         const val STATE_DISCONNECTED = 0
         const val STATE_CONNECTING = 1
         const val STATE_CONNECTED = 2
