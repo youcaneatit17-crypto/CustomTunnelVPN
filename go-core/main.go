@@ -28,6 +28,7 @@ func getFreeLocalAddr() (string, error) {
 func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")
 	dns := flag.String("dns", "8.8.8.8", "DNS resolver")
+	dnsType := flag.String("type", "NULL", "DNS record type (NULL, AUTO, TXT)")
 	ns := flag.String("ns", "", "SlowDNS Nameserver")
 	pubkey := flag.String("pubkey", "", "SlowDNS Public Key")
 	sshAddr := flag.String("ssh", "127.0.0.1:22", "SSH Host:Port")
@@ -41,7 +42,7 @@ func main() {
 
 	targetDialAddr := *sshAddr
 
-	// 1. Jika Host SSH adalah localhost/127.0.0.1, jalankan SlowDNS pada port lokal bebas (anti bentrok port 22/109)
+	// 1. Jalankan SlowDNS (libdnstt.so 1FTunnel) dengan -type NULL / AUTO / TXT
 	if strings.HasPrefix(*sshAddr, "127.0.0.1:") || strings.HasPrefix(*sshAddr, "localhost:") {
 		freeAddr, err := getFreeLocalAddr()
 		if err != nil {
@@ -49,8 +50,38 @@ func main() {
 		}
 		targetDialAddr = freeAddr
 
-		log.Printf("[SlowDNS] Memulai transport ke %s via %s:53 (local %s)...", *ns, *dns, freeAddr)
-		cmd := exec.Command(*dnsttBin, "-udp", *dns+":53", "-pubkey", *pubkey, *ns, freeAddr)
+		resolverVal := strings.TrimSpace(*dns)
+		resolverFlag := "-udp"
+		switch {
+		case strings.HasPrefix(resolverVal, "https://"):
+			resolverFlag = "-doh"
+		case strings.HasPrefix(resolverVal, "tls://"):
+			resolverFlag = "-dot"
+			resolverVal = strings.TrimPrefix(resolverVal, "tls://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":853"
+			}
+		case strings.HasPrefix(resolverVal, "dot://"):
+			resolverFlag = "-dot"
+			resolverVal = strings.TrimPrefix(resolverVal, "dot://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":853"
+			}
+		case strings.HasPrefix(resolverVal, "tcp://"):
+			resolverFlag = "-tcp"
+			resolverVal = strings.TrimPrefix(resolverVal, "tcp://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":53"
+			}
+		default:
+			resolverVal = strings.TrimPrefix(resolverVal, "udp://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":53"
+			}
+		}
+
+		log.Printf("[SlowDNS] Memulai transport (%s, type=%s) ke %s...", resolverVal, *dnsType, *ns)
+		cmd := exec.Command(*dnsttBin, resolverFlag, resolverVal, "-type", *dnsType, "-pubkey", *pubkey, *ns, freeAddr)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Start(); err != nil {
@@ -60,7 +91,7 @@ func main() {
 		time.Sleep(1500 * time.Millisecond)
 	}
 
-	// 2. Hubungkan Modern SSH-2 Client ke terowongan SlowDNS
+	// 2. Hubungkan Modern SSH-2 Client
 	log.Printf("[SSH] Menghubungkan ke %s sebagai %s...", targetDialAddr, *user)
 	config := &ssh.ClientConfig{
 		User: *user,
@@ -91,7 +122,7 @@ func main() {
 		}
 	}()
 
-	// 3. Jalankan SOCKS5 Server pada port bebas atau 1080
+	// 3. Jalankan SOCKS5 Server
 	conf := &socks5.Config{
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return sshClient.Dial(network, addr)

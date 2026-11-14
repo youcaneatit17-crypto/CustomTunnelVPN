@@ -2,14 +2,18 @@ package com.custom.tunnel
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.text.Html
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +21,7 @@ import com.google.android.material.tabs.TabLayout
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var spDnsType: Spinner
     private lateinit var etDns: EditText
     private lateinit var etNs: EditText
     private lateinit var etPubkey: EditText
@@ -29,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layoutUtama: ScrollView
     private lateinit var layoutLog: ScrollView
     private lateinit var tabLayout: TabLayout
+
+    private val dnsTypes = arrayOf("NULL", "AUTO", "TXT")
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -44,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        spDnsType = findViewById(R.id.spDnsType)
         etDns = findViewById(R.id.etDns)
         etNs = findViewById(R.id.etNs)
         etPubkey = findViewById(R.id.etPubkey)
@@ -56,6 +64,23 @@ class MainActivity : AppCompatActivity() {
         layoutUtama = findViewById(R.id.layoutUtama)
         layoutLog = findViewById(R.id.layoutLog)
         tabLayout = findViewById(R.id.tabLayout)
+
+        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, dnsTypes) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                return (super.getView(position, convertView, parent) as TextView).apply {
+                    setTextColor(Color.WHITE)
+                    text = "Tipe DNS: ${dnsTypes[position]}"
+                }
+            }
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                return (super.getDropDownView(position, convertView, parent) as TextView).apply {
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#1E2126"))
+                    setPadding(24, 24, 24, 24)
+                }
+            }
+        }
+        spDnsType.adapter = adapter
 
         loadSavedConfig()
 
@@ -114,6 +139,7 @@ class MainActivity : AppCompatActivity() {
     private fun startTunnelService() {
         val intent = Intent(this, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_START
+            putExtra("dnsType", dnsTypes[spDnsType.selectedItemPosition])
             putExtra("dns", etDns.text.toString().trim())
             putExtra("ns", etNs.text.toString().trim())
             putExtra("pubkey", etPubkey.text.toString().trim())
@@ -143,6 +169,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveConfig() {
         getSharedPreferences("tunnel_cfg", MODE_PRIVATE).edit().apply {
+            putInt("dnsTypeIdx", spDnsType.selectedItemPosition)
             putString("dns", etDns.text.toString())
             putString("ns", etNs.text.toString())
             putString("pubkey", etPubkey.text.toString())
@@ -156,10 +183,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadSavedConfig() {
         val prefs = getSharedPreferences("tunnel_cfg", MODE_PRIVATE)
-        etDns.setText(prefs.getString("dns", "8.8.8.8"))
+        spDnsType.setSelection(prefs.getInt("dnsTypeIdx", 0))
+        etDns.setText(prefs.getString("dns", "1.1.1.1"))
         etNs.setText(prefs.getString("ns", ""))
         etPubkey.setText(prefs.getString("pubkey", ""))
-        etSshHostPort.setText(prefs.getString("sshHostPort", "127.0.0.1:109"))
+        etSshHostPort.setText(prefs.getString("sshHostPort", "127.0.0.1:22"))
         etSshUser.setText(prefs.getString("user", ""))
         etSshPass.setText(prefs.getString("pass", ""))
         etUdpgw.setText(prefs.getString("udpgw", "7300"))

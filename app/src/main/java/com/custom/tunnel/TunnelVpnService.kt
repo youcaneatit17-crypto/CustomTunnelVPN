@@ -32,7 +32,8 @@ class TunnelVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
-        val dns = intent?.getStringExtra("dns") ?: "8.8.8.8"
+        val dnsType = intent?.getStringExtra("dnsType") ?: "NULL"
+        val dns = intent?.getStringExtra("dns") ?: "1.1.1.1"
         val ns = intent?.getStringExtra("ns") ?: ""
         val pubkey = intent?.getStringExtra("pubkey") ?: ""
         val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:109"
@@ -44,14 +45,14 @@ class TunnelVpnService : VpnService() {
         isRunning = true
 
         serviceScope.launch {
-            startTunnelSequence(dns, ns, pubkey, sshHostPort, user, pass, udpgw)
+            startTunnelSequence(dnsType, dns, ns, pubkey, sshHostPort, user, pass, udpgw)
         }
 
         return START_STICKY
     }
 
     private suspend fun startTunnelSequence(
-        dns: String, ns: String, pubkey: String,
+        dnsType: String, dns: String, ns: String, pubkey: String,
         sshHostPort: String, user: String, pass: String, udpgw: String
     ) {
         try {
@@ -65,6 +66,7 @@ class TunnelVpnService : VpnService() {
                 "$nativeDir/libsshcore.so",
                 "-dnstt", "$nativeDir/libdnstt.so",
                 "-dns", dns,
+                "-type", dnsType,
                 "-ns", ns,
                 "-pubkey", pubkey,
                 "-ssh", sshHostPort,
