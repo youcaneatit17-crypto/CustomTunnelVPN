@@ -28,6 +28,7 @@ class TunnelVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var tunnelJob: Job? = null
+    private var networkDebounceJob: Job? = null
     private var vpnInterface: ParcelFileDescriptor? = null
     private var coreProcess: Process? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -36,6 +37,9 @@ class TunnelVpnService : VpnService() {
 
     private val isReconnecting = AtomicBoolean(false)
     private var lastConfig: TunnelConfig? = null
+
+    @Volatile
+    private var activeNetworkHandle: Long = -1L
 
     private data class TunnelConfig(
         val dnsType: String,
@@ -105,15 +109,15 @@ class TunnelVpnService : VpnService() {
             while (shouldKeepRunning && isActive) {
                 attempt++
                 if (attempt > 1) {
-                    val backoffMs = (attempt.coerceAtMost(4) * 2500L)
-                    TunnelLogger.log("Auto-Reconnect: Mencoba menyambung ulang (#$attempt) dalam ${backoffMs / 1000} detik...", "#FFB74D")
-                    updateNotification("Auto-Reconnect (#$attempt)...")
+                    val backoffMs = (attempt * 2000L).coerceAtMost(12000L)
+                    TunnelLogger.log("WARN Coba lagi #$attempt dalam ${backoffMs / 1000}s (TUN tetap aktif; internet dijeda)...", "#FFB74D")
+                    updateNotification("Menyambung ulang (#$attempt)...")
                     delay(backoffMs)
                     if (!shouldKeepRunning) break
                 }
 
                 val sessionCleanExit = runSingleTunnelSession(config)
-                cleanupSessionResources()
+                cleanupCoreProcessOnly()
 
                 if (!shouldKeepRunning) break
 
@@ -189,7 +193,7 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
 
-            val builder = Builder()
+            val pfd = vpnInterface ?: Builder()
                 .setSession("Custom Tunnel VPN")
                 .setMtu(1400)
                 .addAddress("10.0.0.2", 24)
@@ -197,9 +201,9 @@ class TunnelVpnService : VpnService() {
                 .addDnsServer("8.8.8.8")
                 .addDnsServer("1.1.1.1")
                 .addDisallowedApplication(packageName)
-
-            vpnInterface = builder.establish()
-            val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
+                .establish()
+                ?.also { vpnInterface = it }
+                ?: throw IllegalStateException("Gagal membuat TUN interface")
 
             LocalSocket().use { clientSocket ->
                 clientSocket.connect(LocalSocketAddress(tunSockName, LocalSocketAddress.Namespace.ABSTRACT))
@@ -235,13 +239,13 @@ class TunnelVpnService : VpnService() {
                         failCount = 0
                     } catch (_: Exception) {
                         failCount++
-                        TunnelLogger.log("Auto Ping gagal ($failCount/4) - Jalur macet/DC", "#FFB74D")
+                        TunnelLogger.log("Auto Ping gagal ($failCount/5) - Jalur macet/DC", "#FFB74D")
 
-                        if (failCount == 2) {
+                        if (failCount == 3) {
                             TunnelLogger.log("Mencoba Soft-Reconnect (Refresh sesi)...", "#64B5F6")
                             triggerSeamlessRefresh()
-                        } else if (failCount >= 4) {
-                            TunnelLogger.log("Koneksi membeku (4x timeout), memulai Hard-Reconnect...", "#EF5350")
+                        } else if (failCount >= 5) {
+                            TunnelLogger.log("Koneksi membeku (5x timeout), memulai Hard-Reconnect...", "#EF5350")
                             sessionBroken.complete(Unit)
                             break
                         }
@@ -289,27 +293,32 @@ class TunnelVpnService : VpnService() {
         try {
             unregisterNetworkWatcher()
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            activeNetworkHandle = cm.activeNetwork?.networkHandle ?: -1L
             val request = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
                 .build()
 
-            var ignoreFirstCallback = true
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    if (ignoreFirstCallback) {
-                        ignoreFirstCallback = false
-                        return
-                    }
-                    if (shouldKeepRunning && ctrlSockName != null) {
-                        TunnelLogger.log("Perubahan jaringan terdeteksi, menyegarkan sesi...", "#64B5F6")
-                        triggerSeamlessRefresh()
+                    val newHandle = network.networkHandle
+                    if (activeNetworkHandle == -1L) { activeNetworkHandle = newHandle; return }
+                    if (newHandle == activeNetworkHandle) return
+                    activeNetworkHandle = newHandle
+                    networkDebounceJob?.cancel()
+                    networkDebounceJob = serviceScope.launch {
+                        delay(1800)
+                        if (shouldKeepRunning && ctrlSockName != null) {
+                            TunnelLogger.log("WARN Jaringan berubah. Menyambung ulang sesi (TUN tetap aktif)...", "#64B5F6")
+                            triggerSeamlessRefresh()
+                        }
                     }
                 }
 
                 override fun onLost(network: Network) {
+                    if (network.networkHandle == activeNetworkHandle) activeNetworkHandle = -1L
                     if (shouldKeepRunning) {
-                        TunnelLogger.log("Jaringan utama terputus, menunggu sinyal kembali...", "#FFB74D")
+                        TunnelLogger.log("WARN Jaringan utama terputus; VPN tetap aktif, internet dijeda...", "#FFB74D")
                     }
                 }
             }
@@ -319,6 +328,8 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun unregisterNetworkWatcher() {
+        networkDebounceJob?.cancel()
+        networkDebounceJob = null
         try {
             networkCallback?.let {
                 val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -328,7 +339,7 @@ class TunnelVpnService : VpnService() {
         networkCallback = null
     }
 
-    private fun cleanupSessionResources() {
+    private fun cleanupCoreProcessOnly() {
         ctrlSockName = null
         try {
             coreProcess?.destroy()
@@ -369,7 +380,7 @@ class TunnelVpnService : VpnService() {
 
         unregisterNetworkWatcher()
         tunnelJob?.cancel()
-        cleanupSessionResources()
+        cleanupAllResources()
         releaseWakeLock()
 
         if (userInitiated) {
