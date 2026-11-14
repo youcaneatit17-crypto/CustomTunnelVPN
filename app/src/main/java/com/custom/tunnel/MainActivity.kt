@@ -736,37 +736,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateButtonState() {
-        if (TunnelVpnService.isRunning) {
-            btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_pause, theme))
-            btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626"))
-            btnRefresh.visibility = View.VISIBLE
-            tvHeaderStatus.text = "CONNECTED"
-            tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
-            tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
-            tvStatusDotLabel.text = "● Terhubung"
-            tvStatusDotLabel.setTextColor(Color.parseColor("#4ADE80"))
+        when (TunnelVpnService.connectionState) {
+            TunnelVpnService.STATE_CONNECTED -> {
+                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_pause, theme))
+                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626"))
+                btnRefresh.visibility = View.VISIBLE
+                tvHeaderStatus.text = "CONNECTED"
+                tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
+                tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
+                tvStatusDotLabel.text = "● Connected (TUN Aktif)"
+                tvStatusDotLabel.setTextColor(Color.parseColor("#4ADE80"))
 
-            if (!isTrafficActive) {
-                isTrafficActive = true
-                startTrafficSim()
+                if (!isTrafficActive) {
+                    isTrafficActive = true
+                    startTrafficSim()
+                }
             }
-        } else {
-            btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_play, theme))
-            btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2563EB"))
-            btnRefresh.visibility = View.GONE
-            tvHeaderStatus.text = "OFFLINE"
-            tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
-            tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
-            tvStatusDotLabel.text = "● Tidak aktif"
-            tvStatusDotLabel.setTextColor(Color.parseColor("#9CA3AF"))
+            TunnelVpnService.STATE_CONNECTING -> {
+                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel, theme))
+                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#D97706"))
+                btnRefresh.visibility = View.GONE
+                tvHeaderStatus.text = "CONNECTING"
+                tvHeaderStatus.setTextColor(Color.parseColor("#FBBF24"))
+                tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
+                tvStatusDotLabel.text = "● Connecting... (TUN belum aktif)"
+                tvStatusDotLabel.setTextColor(Color.parseColor("#FBBF24"))
+                isTrafficActive = false
+            }
+            else -> {
+                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_play, theme))
+                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2563EB"))
+                btnRefresh.visibility = View.GONE
+                tvHeaderStatus.text = "OFFLINE"
+                tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
+                tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
+                tvStatusDotLabel.text = "● Start / Siap"
+                tvStatusDotLabel.setTextColor(Color.parseColor("#9CA3AF"))
 
-            isTrafficActive = false
-            tvStatDown.text = "0 bps"
-            tvStatUp.text = "0 bps"
-            tvStatDownPeak.text = "Puncak: 0 bps"
-            tvStatUpPeak.text = "Puncak: 0 bps"
-            maxDownPeak = 0L
-            maxUpPeak = 0L
+                isTrafficActive = false
+                tvStatDown.text = "0 bps"
+                tvStatUp.text = "0 bps"
+                tvStatDownPeak.text = "Puncak: 0 bps"
+                tvStatUpPeak.text = "Puncak: 0 bps"
+                maxDownPeak = 0L
+                maxUpPeak = 0L
+            }
         }
     }
 

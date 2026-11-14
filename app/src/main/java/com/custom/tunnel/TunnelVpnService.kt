@@ -55,6 +55,11 @@ class TunnelVpnService : VpnService() {
     companion object {
         @Volatile
         var isRunning = false
+        connectionState = STATE_DISCONNECTED
+        const val STATE_DISCONNECTED = 0
+        const val STATE_CONNECTING = 1
+        const val STATE_CONNECTED = 2
+        @Volatile var connectionState = STATE_DISCONNECTED
         @Volatile
         var shouldKeepRunning = false
 
@@ -95,6 +100,7 @@ class TunnelVpnService : VpnService() {
         startForegroundNotification("Menghubungkan terowongan...")
         shouldKeepRunning = true
         isRunning = true
+        connectionState = STATE_CONNECTING
 
         registerNetworkWatcher()
         startSupervisorLoop(config)
@@ -183,6 +189,7 @@ class TunnelVpnService : VpnService() {
                     }
                     if (shouldKeepRunning) {
                         TunnelLogger.log("Core terputus dari server (DC terdeteksi).", "#EF5350")
+                        connectionState = STATE_CONNECTING
                         sessionBroken.complete(Unit)
                     }
                 }
@@ -193,6 +200,7 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
 
+            // TUN interface baru dibuat setelah SSH & SlowDNS benar-benar terhubung
             val pfd = vpnInterface ?: Builder().apply {
                 setSession("Custom Tunnel VPN")
                 setMtu(1400)
@@ -241,7 +249,10 @@ class TunnelVpnService : VpnService() {
                     }
                 }
             }.establish()
-                ?.also { vpnInterface = it }
+                ?.also {
+                    vpnInterface = it
+                    connectionState = STATE_CONNECTED
+                }
                 ?: throw IllegalStateException("Gagal membuat TUN interface")
 
             LocalSocket().use { clientSocket ->
@@ -285,7 +296,8 @@ class TunnelVpnService : VpnService() {
                             triggerSeamlessRefresh()
                         } else if (failCount >= 5) {
                             TunnelLogger.log("Koneksi membeku (5x timeout), memulai Hard-Reconnect...", "#EF5350")
-                            sessionBroken.complete(Unit)
+                            connectionState = STATE_CONNECTING
+                        sessionBroken.complete(Unit)
                             break
                         }
                     }
@@ -420,6 +432,7 @@ class TunnelVpnService : VpnService() {
         if (!shouldKeepRunning && !isRunning) return
         shouldKeepRunning = false
         isRunning = false
+        connectionState = STATE_DISCONNECTED
 
         unregisterNetworkWatcher()
         tunnelJob?.cancel()
