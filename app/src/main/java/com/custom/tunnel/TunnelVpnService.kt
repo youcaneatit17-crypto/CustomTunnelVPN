@@ -3,6 +3,8 @@ package com.custom.tunnel
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.net.LocalSocket
+import android.net.LocalSocketAddress
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -18,7 +20,6 @@ class TunnelVpnService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var vpnInterface: ParcelFileDescriptor? = null
     private var coreProcess: Process? = null
-    private var hevProcess: Process? = null
 
     companion object {
         var isRunning = false
@@ -58,6 +59,7 @@ class TunnelVpnService : VpnService() {
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
             val localSocksPort = 1080
+            val tunSockName = "custom_tunnel_fd_${System.currentTimeMillis()}"
             val connectedDeferred = CompletableDeferred<Boolean>()
 
             TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS Core...", "#64B5F6")
@@ -65,6 +67,8 @@ class TunnelVpnService : VpnService() {
             val coreCmd = arrayOf(
                 "$nativeDir/libsshcore.so",
                 "-dnstt", "$nativeDir/libdnstt.so",
+                "-tunbin", "$nativeDir/libtun2socks.so",
+                "-tunsock", tunSockName,
                 "-dns", dns,
                 "-type", dnsType,
                 "-ns", ns,
@@ -113,30 +117,15 @@ class TunnelVpnService : VpnService() {
                 .addDisallowedApplication(packageName)
 
             vpnInterface = builder.establish()
-            val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
+            val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
 
-            // Jalankan libhev-socks5-tunnel.so (engine sama seperti 1FTunnel)
-            TunnelLogger.log("Mesin TUN aktif: hev-socks5-tunnel (fd://$tunFd)", "#81C784")
-
-            // Buat konfigurasi minimal untuk hev-socks5-tunnel secara runtime atau argumen
-            val hevConfigPath = File(cacheDir, "hev.yml").absolutePath
-            File(hevConfigPath).writeText("""
-                [tunnel]
-                mtu = 1500
-                fd = $tunFd
-
-                [socks5]
-                port = 1080
-                address = 127.0.0.1
-                udp = true
-            """.trimIndent())
-
-            val hevCmd = arrayOf(
-                "$nativeDir/libhev-socks5-tunnel.so",
-                hevConfigPath
-            )
-            hevProcess = ProcessBuilder(*hevCmd).redirectErrorStream(true).start()
-            monitorProcessOutput(hevProcess!!, "HEV")
+            // Kirim FileDescriptor TUN asli (O_RDWR) ke Go core lewat Unix Domain Socket SCM_RIGHTS
+            LocalSocket().use { clientSocket ->
+                clientSocket.connect(LocalSocketAddress(tunSockName, LocalSocketAddress.Namespace.ABSTRACT))
+                clientSocket.setFileDescriptorsForSend(arrayOf(pfd.fileDescriptor))
+                clientSocket.outputStream.write(byteArrayOf(1))
+                clientSocket.outputStream.flush()
+            }
 
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
             TunnelLogger.log("DNS lewat terowongan aktif", "#81C784")
@@ -148,19 +137,6 @@ class TunnelVpnService : VpnService() {
         } catch (e: Exception) {
             TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
             stopTunnel()
-        }
-    }
-
-    private fun monitorProcessOutput(process: Process, tag: String) {
-        serviceScope.launch {
-            try {
-                BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        TunnelLogger.log("[$tag] $line", "#9E9E9E")
-                    }
-                }
-            } catch (_: Exception) { }
         }
     }
 
@@ -185,7 +161,6 @@ class TunnelVpnService : VpnService() {
     private fun stopTunnel() {
         if (!isRunning) return
         isRunning = false
-        try { hevProcess?.destroy() } catch (_: Exception) {}
         try { coreProcess?.destroy() } catch (_: Exception) {}
         try { vpnInterface?.close() } catch (_: Exception) {}
         TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")
@@ -203,7 +178,7 @@ class TunnelVpnService : VpnService() {
         }
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Custom Tunnel Aktif")
-            .setContentText("Go SSH + SlowDNS + HEV berjalan")
+            .setContentText("Go SSH + SlowDNS + TUN berjalan")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .build()
         startForeground(1, notification)
