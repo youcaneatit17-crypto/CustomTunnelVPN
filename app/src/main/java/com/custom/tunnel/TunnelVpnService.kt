@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.trilead.ssh2.Connection
+import com.trilead.ssh2.LocalPortForwarder
 import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.DataInputStream
@@ -92,7 +93,7 @@ class TunnelVpnService : VpnService() {
             }
             sshConnection = conn
 
-            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080 via Trilead LocalPortForwarder
+            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080
             startLocalSocks5Server(conn, localSocksPort)
 
             // 3. Buat Antarmuka Virtual VPN (tun0)
@@ -147,8 +148,14 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    private fun findFreeLocalPort(): Int {
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { socket ->
+            return socket.localPort
+        }
+    }
+
     private suspend fun handleSocks5Client(client: Socket, conn: Connection) = withContext(Dispatchers.IO) {
-        var lpf: com.trilead.ssh2.LocalPortForwarder? = null
+        var lpf: LocalPortForwarder? = null
         var forwardSocket: Socket? = null
         try {
             val input = DataInputStream(client.getInputStream())
@@ -196,10 +203,11 @@ class TunnelVpnService : VpnService() {
                 return@withContext
             }
 
-            // Buat LocalPortForwarder pada port lokal acak (0) menuju destHost:destPort
-            lpf = conn.createLocalPortForwarder(InetSocketAddress("127.0.0.1", 0), destHost, destPort)
+            // Alokasikan port bebas dan buat Trilead LocalPortForwarder
+            val freePort = findFreeLocalPort()
+            lpf = conn.createLocalPortForwarder(freePort, destHost, destPort)
             forwardSocket = Socket()
-            forwardSocket.connect(lpf.localSocketAddress, 10000)
+            forwardSocket.connect(InetSocketAddress("127.0.0.1", freePort), 10000)
 
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
