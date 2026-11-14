@@ -7,8 +7,8 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
-import com.jcraft.jsch.JSch
-import com.jcraft.jsch.Session
+import com.trilead.ssh2.Connection
+import com.trilead.ssh2.DynamicPortForwarder
 import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -21,7 +21,8 @@ class TunnelVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var slowDnsProcess: Process? = null
     private var tun2SocksProcess: Process? = null
-    private var sshSession: Session? = null
+    private var sshConnection: Connection? = null
+    private var dynamicForwarder: DynamicPortForwarder? = null
 
     companion object {
         var isRunning = false
@@ -61,6 +62,7 @@ class TunnelVpnService : VpnService() {
             val localSshPort = 2222
             val localSocksPort = 1080
 
+            // 1. Jalankan SlowDNS (libdnstt.so)
             TunnelLogger.log("[ss] SlowDNS: Memulai...", "#64B5F6")
             TunnelLogger.log("[ss] SlowDNS: Menghubungkan ke server ($ns)", "#64B5F6")
 
@@ -76,18 +78,20 @@ class TunnelVpnService : VpnService() {
 
             delay(1500)
 
+            // 2. Hubungkan SSH-2 via Terowongan SlowDNS (127.0.0.1:2222)
             TunnelLogger.log("[ss] Menginisialisasi SSH...", "#64B5F6")
             TunnelLogger.log("[ss] Memulai core SSH-2", "#64B5F6")
 
-            val jsch = JSch()
-            sshSession = jsch.getSession(user, "127.0.0.1", localSshPort).apply {
-                setPassword(pass)
-                setConfig("StrictHostKeyChecking", "no")
-                setConfig("PreferredAuthentications", "password")
-                connect(15000)
-                setPortForwardingD("127.0.0.1", localSocksPort)
+            val conn = Connection("127.0.0.1", localSshPort)
+            conn.connect(null, 15000, 15000)
+            val isAuthenticated = conn.authenticateWithPassword(user, pass)
+            if (!isAuthenticated) {
+                throw IllegalStateException("Autentikasi SSH gagal (Username/Password salah)")
             }
+            sshConnection = conn
+            dynamicForwarder = conn.createDynamicPortForwarder(localSocksPort)
 
+            // 3. Buat Antarmuka Virtual VPN (tun0)
             val builder = Builder()
                 .setSession("Custom Tunnel VPN")
                 .setMtu(1500)
@@ -99,6 +103,7 @@ class TunnelVpnService : VpnService() {
             vpnInterface = builder.establish()
             val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
 
+            // 4. Jalankan BadVPN tun2socks (libtun2socks.so)
             TunnelLogger.log("Mesin SOCKS aktif: BadVPN (UDPGW: $udpgw)", "#81C784")
             val tunCmd = arrayOf(
                 "$nativeDir/libtun2socks.so",
@@ -159,7 +164,8 @@ class TunnelVpnService : VpnService() {
 
     private fun stopTunnel() {
         isRunning = false
-        try { sshSession?.disconnect() } catch (_: Exception) {}
+        try { dynamicForwarder?.close() } catch (_: Exception) {}
+        try { sshConnection?.close() } catch (_: Exception) {}
         try { tun2SocksProcess?.destroy() } catch (_: Exception) {}
         try { slowDnsProcess?.destroy() } catch (_: Exception) {}
         try { vpnInterface?.close() } catch (_: Exception) {}
