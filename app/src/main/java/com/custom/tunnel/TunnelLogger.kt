@@ -1,32 +1,37 @@
 package com.custom.tunnel
 
-import android.text.Html
-import android.text.Spanned
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object TunnelLogger {
-    private val _logs = MutableStateFlow<Spanned>(Html.fromHtml("", Html.FROM_HTML_MODE_LEGACY))
-    val logs = _logs.asStateFlow()
-    private val buffer = StringBuilder()
+    private val logs = mutableListOf<String>()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    var onLogUpdated: (() -> Unit)? = null
 
-    fun log(message: String, colorHex: String = "#D0D7DE") {
+    @Synchronized
+    fun log(message: String, colorHex: String = "#E0E0E0") {
         val time = timeFormat.format(Date())
-        buffer.append("<font color='#7D8590'>[$time]</font> <font color='$colorHex'>$message</font><br>")
-        _logs.value = Html.fromHtml(buffer.toString(), Html.FROM_HTML_MODE_LEGACY)
+        val escaped = message.replace("<", "&lt;").replace(">", "&gt;")
+        logs.add("<font color='#757575'>[$time]</font> <font color='$colorHex'>$escaped</font>")
+        if (logs.size > 300) logs.removeAt(0)
+        onLogUpdated?.invoke()
     }
 
+    @Synchronized
     fun rawHtml(html: String) {
-        buffer.append("$html<br>")
-        _logs.value = Html.fromHtml(buffer.toString(), Html.FROM_HTML_MODE_LEGACY)
+        val time = timeFormat.format(Date())
+        logs.add("<font color='#757575'>[$time]</font> $html")
+        if (logs.size > 300) logs.removeAt(0)
+        onLogUpdated?.invoke()
     }
 
+    @Synchronized
     fun clear() {
-        buffer.clear()
-        _logs.value = Html.fromHtml("", Html.FROM_HTML_MODE_LEGACY)
+        logs.clear()
+        onLogUpdated?.invoke()
     }
+
+    @Synchronized
+    fun getHtmlLogs(): String = logs.joinToString("<br/>")
 }
