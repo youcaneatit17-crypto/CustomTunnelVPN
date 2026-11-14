@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121417"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#1B1E23"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Custom Tunnel"
+            android:textColor="#FFA726"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:background="#1B1E23"
+        app:tabIndicatorColor="#42A5F5"
+        app:tabSelectedTextColor="#FFFFFF"
+        app:tabTextColor="#8E96A0">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Utama" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Log" />
+    </com.google.android.material.tabs.TabLayout>
+
+    <ScrollView
+        android:id="@+id/layoutUtama"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="KONFIGURASI SLOWDNS"
+                android:textColor="#42A5F5"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/etDnsResolver"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="DNS Resolver (contoh: 8.8.8.8)"
+                android:padding="12dp"
+                android:text="8.8.8.8"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etNameserver"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="Nameserver (NS Domain)"
+                android:padding="12dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etPublicKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="SlowDNS Public Key (Hex)"
+                android:padding="12dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="AKUN SSH &amp; BADVPN"
+                android:textColor="#42A5F5"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/etSshUser"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="Username SSH"
+                android:padding="12dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etSshPass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="Password SSH"
+                android:inputType="textPassword"
+                android:padding="12dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etUdpGwPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#1E2229"
+                android:hint="Port BadVPN UDPGW (default: 7300)"
+                android:inputType="number"
+                android:padding="12dp"
+                android:text="7300"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#6C757D"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnConnect"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="20dp"
+                android:backgroundTint="#2E7D32"
+                android:text="HUBUNGKAN"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </ScrollView>
+
+    <ScrollView
+        android:id="@+id/layoutLog"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="4dp"
+            android:textColor="#D0D7DE"
+            android:textSize="12sp" />
+    </ScrollView>
+</LinearLayout>
