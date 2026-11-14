@@ -4,8 +4,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -18,18 +22,38 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class TunnelVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var tunnelJob: Job? = null
     private var vpnInterface: ParcelFileDescriptor? = null
     private var coreProcess: Process? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var ctrlSockName: String? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    private val isReconnecting = AtomicBoolean(false)
+    private var lastConfig: TunnelConfig? = null
+
+    private data class TunnelConfig(
+        val dnsType: String,
+        val dns: String,
+        val ns: String,
+        val pubkey: String,
+        val sshHostPort: String,
+        val user: String,
+        val pass: String,
+        val sessions: Int
+    )
 
     companion object {
         @Volatile
         var isRunning = false
+        @Volatile
+        var shouldKeepRunning = false
+
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_REFRESH = "ACTION_REFRESH"
@@ -38,7 +62,7 @@ class TunnelVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopTunnel()
+                stopTunnel(userInitiated = true)
                 return START_NOT_STICKY
             }
             ACTION_REFRESH -> {
@@ -47,49 +71,65 @@ class TunnelVpnService : VpnService() {
             }
         }
 
-        if (isRunning) {
+        if (shouldKeepRunning && tunnelJob?.isActive == true) {
             return START_STICKY
         }
 
-        val dnsType = intent?.getStringExtra("dnsType") ?: "NULL"
-        val dns = intent?.getStringExtra("dns") ?: "1.1.1.1"
-        val ns = intent?.getStringExtra("ns") ?: ""
-        val pubkey = intent?.getStringExtra("pubkey") ?: ""
-        val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:22"
-        val user = intent?.getStringExtra("user") ?: ""
-        val pass = intent?.getStringExtra("pass") ?: ""
-        val sessions = intent?.getIntExtra("sessions", 2) ?: 2
+        val config = TunnelConfig(
+            dnsType = intent?.getStringExtra("dnsType") ?: "NULL",
+            dns = intent?.getStringExtra("dns") ?: "1.1.1.1",
+            ns = intent?.getStringExtra("ns") ?: "",
+            pubkey = intent?.getStringExtra("pubkey") ?: "",
+            sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:22",
+            user = intent?.getStringExtra("user") ?: "",
+            pass = intent?.getStringExtra("pass") ?: "",
+            sessions = intent?.getIntExtra("sessions", 2) ?: 2
+        )
+        lastConfig = config
 
         acquireWakeLock()
-        startForegroundNotification()
+        startForegroundNotification("Menghubungkan terowongan...")
+        shouldKeepRunning = true
         isRunning = true
 
-        serviceScope.launch {
-            startTunnelSequence(dnsType, dns, ns, pubkey, sshHostPort, user, pass, sessions)
-        }
+        registerNetworkWatcher()
+        startSupervisorLoop(config)
 
         return START_STICKY
     }
 
-    private fun triggerSeamlessRefresh() {
-        val sock = ctrlSockName ?: return
-        serviceScope.launch {
-            try {
-                LocalSocket().use { client ->
-                    client.connect(LocalSocketAddress(sock, LocalSocketAddress.Namespace.ABSTRACT))
-                    client.outputStream.write("REFRESH\n".toByteArray())
-                    client.outputStream.flush()
+    private fun startSupervisorLoop(config: TunnelConfig) {
+        tunnelJob?.cancel()
+        tunnelJob = serviceScope.launch {
+            var attempt = 0
+            while (shouldKeepRunning && isActive) {
+                attempt++
+                if (attempt > 1) {
+                    val backoffMs = (attempt.coerceAtMost(4) * 2500L)
+                    TunnelLogger.log("Auto-Reconnect: Mencoba menyambung ulang (#$attempt) dalam ${backoffMs / 1000} detik...", "#FFB74D")
+                    updateNotification("Auto-Reconnect (#$attempt)...")
+                    delay(backoffMs)
+                    if (!shouldKeepRunning) break
                 }
-            } catch (e: Exception) {
-                TunnelLogger.log("Gagal mengirim sinyal refresh: ${e.message}", "#EF5350")
+
+                val sessionCleanExit = runSingleTunnelSession(config)
+                cleanupSessionResources()
+
+                if (!shouldKeepRunning) break
+
+                if (sessionCleanExit) {
+                    attempt = 0
+                }
             }
         }
     }
 
-    private suspend fun startTunnelSequence(
-        dnsType: String, dns: String, ns: String, pubkey: String,
-        sshHostPort: String, user: String, pass: String, sessions: Int
-    ) {
+    private suspend fun runSingleTunnelSession(config: TunnelConfig): Boolean = coroutineScope {
+        var pingJob: Job? = null
+        var logJob: Job? = null
+        val sessionBroken = CompletableDeferred<Unit>()
+        var wasConnected = false
+
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
             val localSocksPort = 1080
@@ -99,7 +139,7 @@ class TunnelVpnService : VpnService() {
             ctrlSockName = controlSock
             val connectedDeferred = CompletableDeferred<Boolean>()
 
-            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS ($sessions Sesi)...", "#64B5F6")
+            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS (${config.sessions} Sesi)...", "#64B5F6")
 
             val coreCmd = arrayOf(
                 "$nativeDir/libsshcore.so",
@@ -107,21 +147,22 @@ class TunnelVpnService : VpnService() {
                 "-tunbin", "$nativeDir/libtun2socks.so",
                 "-tunsock", tunSockName,
                 "-ctrlsock", controlSock,
-                "-dns", dns,
-                "-type", dnsType,
-                "-ns", ns,
-                "-pubkey", pubkey,
-                "-ssh", sshHostPort,
-                "-user", user,
-                "-pass", pass,
-                "-sessions", sessions.toString(),
+                "-dns", config.dns,
+                "-type", config.dnsType,
+                "-ns", config.ns,
+                "-pubkey", config.pubkey,
+                "-ssh", config.sshHostPort,
+                "-user", config.user,
+                "-pass", config.pass,
+                "-sessions", config.sessions.toString(),
                 "-socks", "127.0.0.1:$localSocksPort"
             )
-            coreProcess = ProcessBuilder(*coreCmd).redirectErrorStream(true).start()
+            val proc = ProcessBuilder(*coreCmd).redirectErrorStream(true).start()
+            coreProcess = proc
 
-            serviceScope.launch {
+            logJob = launch {
                 try {
-                    BufferedReader(InputStreamReader(coreProcess!!.inputStream)).use { reader ->
+                    BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                         var line: String?
                         while (reader.readLine().also { line = it } != null) {
                             if (line == "READY_CONNECTED") {
@@ -136,11 +177,14 @@ class TunnelVpnService : VpnService() {
                     if (!connectedDeferred.isCompleted) {
                         connectedDeferred.complete(false)
                     }
-                    if (isRunning) stopTunnel()
+                    if (shouldKeepRunning) {
+                        TunnelLogger.log("Core terputus dari server (DC terdeteksi).", "#EF5350")
+                        sessionBroken.complete(Unit)
+                    }
                 }
             }
 
-            val isConnected = withTimeoutOrNull(50000) { connectedDeferred.await() } ?: false
+            val isConnected = withTimeoutOrNull(45000) { connectedDeferred.await() } ?: false
             if (!isConnected) {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
@@ -164,36 +208,140 @@ class TunnelVpnService : VpnService() {
                 clientSocket.outputStream.flush()
             }
 
+            wasConnected = true
+            updateNotification("Go SSH + SlowDNS Terhubung")
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
-            TunnelLogger.log("DNS Cache & Auto-Heal aktif", "#81C784")
+            TunnelLogger.log("Auto-Reconnect & Watchdog aktif", "#81C784")
             TunnelLogger.log("Profiles: Berhasil terhubung", "#00E676")
-            TunnelLogger.log("Selamat berselancar", "#00E676")
 
-            startAutoPing(localSocksPort)
+            // Watchdog Auto Ping + Auto Reconnect Trigger
+            pingJob = launch {
+                val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localSocksPort))
+                var failCount = 0
 
+                while (isActive && shouldKeepRunning) {
+                    delay(12000)
+                    try {
+                        val start = System.currentTimeMillis()
+                        Socket(socksProxy).use { socket ->
+                            socket.connect(InetSocketAddress.createUnresolved("1.1.1.1", 80), 6000)
+                        }
+                        val ping = System.currentTimeMillis() - start
+                        if (failCount > 0) {
+                            TunnelLogger.log("Jalur pulih kembali ($ping ms)", "#81C784")
+                        } else {
+                            TunnelLogger.log("Auto Ping (Tunnel): $ping ms", "#81C784")
+                        }
+                        failCount = 0
+                    } catch (_: Exception) {
+                        failCount++
+                        TunnelLogger.log("Auto Ping gagal ($failCount/4) - Jalur macet/DC", "#FFB74D")
+
+                        if (failCount == 2) {
+                            TunnelLogger.log("Mencoba Soft-Reconnect (Refresh sesi)...", "#64B5F6")
+                            triggerSeamlessRefresh()
+                        } else if (failCount >= 4) {
+                            TunnelLogger.log("Koneksi membeku (4x timeout), memulai Hard-Reconnect...", "#EF5350")
+                            sessionBroken.complete(Unit)
+                            break
+                        }
+                    }
+                }
+            }
+
+            // Tunggu sampai sesi rusak/DC atau coroutine dibatalkan
+            sessionBroken.await()
+
+        } catch (e: CancellationException) {
+            // Dibatalkan oleh user stop
         } catch (e: Exception) {
-            TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
-            stopTunnel()
+            if (shouldKeepRunning) {
+                TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
+            }
+        } finally {
+            pingJob?.cancel()
+            logJob?.cancel()
+        }
+
+        return wasConnected
+    }
+
+    private fun triggerSeamlessRefresh() {
+        val sock = ctrlSockName ?: return
+        if (!isReconnecting.compareAndSet(false, true)) return
+        serviceScope.launch {
+            try {
+                LocalSocket().use { client ->
+                    client.connect(LocalSocketAddress(sock, LocalSocketAddress.Namespace.ABSTRACT))
+                    client.outputStream.write("REFRESH\n".toByteArray())
+                    client.outputStream.flush()
+                }
+            } catch (e: Exception) {
+                TunnelLogger.log("Gagal mengirim sinyal refresh: ${e.message}", "#EF5350")
+            } finally {
+                delay(1500)
+                isReconnecting.set(false)
+            }
         }
     }
 
-    private fun startAutoPing(socksPort: Int) {
-        serviceScope.launch {
-            val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-            while (isRunning) {
-                delay(15000)
-                try {
-                    val start = System.currentTimeMillis()
-                    Socket(socksProxy).use { socket ->
-                        socket.connect(InetSocketAddress.createUnresolved("1.1.1.1", 80), 6000)
+    private fun registerNetworkWatcher() {
+        try {
+            unregisterNetworkWatcher()
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build()
+
+            var ignoreFirstCallback = true
+            val callback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    if (ignoreFirstCallback) {
+                        ignoreFirstCallback = false
+                        return
                     }
-                    val ping = System.currentTimeMillis() - start
-                    TunnelLogger.log("Auto Ping (Tunnel): $ping ms", "#81C784")
-                } catch (_: Exception) {
-                    TunnelLogger.log("Auto Ping (Tunnel): Jalur sibuk / Timeout", "#FFB74D")
+                    if (shouldKeepRunning && ctrlSockName != null) {
+                        TunnelLogger.log("Perubahan jaringan terdeteksi, menyegarkan sesi...", "#64B5F6")
+                        triggerSeamlessRefresh()
+                    }
+                }
+
+                override fun onLost(network: Network) {
+                    if (shouldKeepRunning) {
+                        TunnelLogger.log("Jaringan utama terputus, menunggu sinyal kembali...", "#FFB74D")
+                    }
                 }
             }
-        }
+            cm.registerNetworkCallback(request, callback)
+            networkCallback = callback
+        } catch (_: Exception) {}
+    }
+
+    private fun unregisterNetworkWatcher() {
+        try {
+            networkCallback?.let {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                cm.unregisterNetworkCallback(it)
+            }
+        } catch (_: Exception) {}
+        networkCallback = null
+    }
+
+    private fun cleanupSessionResources() {
+        ctrlSockName = null
+        try {
+            coreProcess?.destroy()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (coreProcess?.waitFor(400, TimeUnit.MILLISECONDS) == false) {
+                    coreProcess?.destroyForcibly()
+                }
+            }
+        } catch (_: Exception) {}
+        coreProcess = null
+
+        try { vpnInterface?.close() } catch (_: Exception) {}
+        vpnInterface = null
     }
 
     private fun acquireWakeLock() {
@@ -214,36 +362,30 @@ class TunnelVpnService : VpnService() {
     }
 
     @Synchronized
-    private fun stopTunnel() {
-        if (!isRunning) return
+    private fun stopTunnel(userInitiated: Boolean = true) {
+        if (!shouldKeepRunning && !isRunning) return
+        shouldKeepRunning = false
         isRunning = false
-        ctrlSockName = null
-        try {
-            coreProcess?.destroy()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (coreProcess?.waitFor(400, TimeUnit.MILLISECONDS) == false) {
-                    coreProcess?.destroyForcibly()
-                }
-            }
-        } catch (_: Exception) {}
-        coreProcess = null
 
-        try { vpnInterface?.close() } catch (_: Exception) {}
-        vpnInterface = null
-
+        unregisterNetworkWatcher()
+        tunnelJob?.cancel()
+        cleanupSessionResources()
         releaseWakeLock()
-        TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")
+
+        if (userInitiated) {
+            TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")
+        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onRevoke() {
         TunnelLogger.log("Izin VPN dicabut oleh sistem.", "#EF5350")
-        stopTunnel()
+        stopTunnel(userInitiated = true)
         super.onRevoke()
     }
 
-    private fun startForegroundNotification() {
+    private fun startForegroundNotification(statusText: String) {
         val channelId = "custom_tunnel_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -253,14 +395,28 @@ class TunnelVpnService : VpnService() {
         }
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Custom Tunnel Aktif")
-            .setContentText("Go SSH + SlowDNS Multi-Session berjalan")
+            .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setOnlyAlertOnce(true)
             .build()
         startForeground(1, notification)
     }
 
+    private fun updateNotification(statusText: String) {
+        try {
+            val channelId = "custom_tunnel_channel"
+            val notification = NotificationCompat.Builder(this, channelId)
+                .setContentTitle("Custom Tunnel Aktif")
+                .setContentText(statusText)
+                .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setOnlyAlertOnce(true)
+                .build()
+            getSystemService(NotificationManager::class.java).notify(1, notification)
+        } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
-        stopTunnel()
+        stopTunnel(userInitiated = false)
         serviceScope.cancel()
         super.onDestroy()
     }
