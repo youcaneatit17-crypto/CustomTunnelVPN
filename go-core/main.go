@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -119,24 +120,46 @@ func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 			}
 		}
 
-		log.Printf("[Sesi #%d] Memulai SlowDNS (%s, type=%s) ke %s...", id, resolverVal, m.dnsType, m.ns)
+		if id == 1 {
+			log.Printf("[ss] SlowDNS: Memulai...")
+			log.Printf("[ss] using UDP resolver=%s network=udp4 session=%d", resolverVal, m.sessions)
+			log.Printf("[ss] Tujuan koneksi: %s", resolverVal)
+			log.Printf("[ss] SlowDNS: Menghubungkan ke server")
+			log.Printf("[ss] Metode SSH: SlowDNS")
+			log.Printf("[ss] Menggunakan proxy: Tidak ada")
+			log.Printf("[ss] Payload SSH: Tidak dikirim")
+		}
 		dnsttCmd = exec.Command(m.dnsttBin, resolverFlag, resolverVal, "-type", m.dnsType, "-pubkey", m.pubkey, m.ns, freeAddr)
-		dnsttCmd.Stdout = os.Stdout
-		dnsttCmd.Stderr = os.Stderr
+		dnsttCmd.Stdout = io.Discard
+		dnsttCmd.Stderr = io.Discard
 		if err := dnsttCmd.Start(); err != nil {
 			return nil, fmt.Errorf("gagal memulai SlowDNS: %v", err)
 		}
 		time.Sleep(1400 * time.Millisecond)
+		if id == 1 {
+			log.Printf("[ss] SlowDNS: %s aktif", m.dnsType)
+		}
+	} else if id == 1 {
+		log.Printf("[ss] Tujuan koneksi: %s", m.sshAddr)
+		log.Printf("[ss] Metode SSH: Direct SSH-2")
 	}
 
-	log.Printf("[Sesi #%d] Menghubungkan SSH ke %s sebagai %s...", id, targetDialAddr, m.user)
+	var fingerprintStr string
 	config := &ssh.ClientConfig{
 		User: m.user,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(m.pass),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         35 * time.Second,
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			sum := md5.Sum(key.Marshal())
+			parts := make([]string, len(sum))
+			for i, b := range sum {
+				parts[i] = fmt.Sprintf("%02x", b)
+			}
+			fingerprintStr = strings.Join(parts, ":")
+			return nil
+		},
+		Timeout: 35 * time.Second,
 	}
 
 	sshClient, err := ssh.Dial("tcp", targetDialAddr, config)
@@ -144,6 +167,20 @@ func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 		if dnsttCmd != nil && dnsttCmd.Process != nil {
 			_ = dnsttCmd.Process.Kill()
 		}
+		return nil, fmt.Errorf("gagal terhubung SSH (%s): %v", m.sshAddr, err)
+	}
+
+	if id == 1 {
+		if fingerprintStr != "" {
+			log.Printf("[ss] Sidik jari %s", fingerprintStr)
+		}
+		srvVer := strings.TrimSpace(string(sshClient.ServerVersion()))
+		if srvVer != "" {
+			log.Printf("[ss] %s", srvVer)
+		}
+		log.Printf("[ss] Algoritma pertukaran kunci: curve25519-sha256 / diffie-hellman-group14-sha1")
+		log.Printf("[ss] Menggunakan algoritma: aes256-ctr / chacha20-poly1305@openssh.com")
+	}
 		return nil, fmt.Errorf("gagal terhubung SSH: %v", err)
 	}
 

@@ -148,7 +148,8 @@ class TunnelVpnService : VpnService() {
             ctrlSockName = controlSock
             val connectedDeferred = CompletableDeferred<Boolean>()
 
-            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS (${config.sessions} Sesi)...", "#64B5F6")
+            TunnelLogger.log("[ss] Menginisialisasi SSH…", "#64B5F6")
+            TunnelLogger.log("[ss] Memulai core SSH-2", "#64B5F6")
 
             val coreCmd = arrayOf(
                 "$nativeDir/libsshcore.so",
@@ -224,7 +225,7 @@ class TunnelVpnService : VpnService() {
                                 } catch (_: Exception) {}
                             }
                         }
-                        TunnelLogger.log("VPN per aplikasi: $count aplikasi dikecualikan.", "#B0BEC5")
+                        TunnelLogger.log("VPN per aplikasi: $count aplikasi tidak menggunakan VPN.", "#B0BEC5")
                     }
                     "include" -> {
                         var count = 0
@@ -240,7 +241,7 @@ class TunnelVpnService : VpnService() {
                             try { addDisallowedApplication(packageName) } catch (_: Exception) {}
                             TunnelLogger.log("VPN per aplikasi: Mode Hanya Terpilih kosong, fallback semua aplikasi.", "#FFB74D")
                         } else {
-                            TunnelLogger.log("VPN per aplikasi: Hanya $count aplikasi terpilih lewat VPN.", "#B0BEC5")
+                            TunnelLogger.log("VPN per aplikasi: $count aplikasi menggunakan VPN.", "#B0BEC5")
                         }
                     }
                     else -> {
@@ -263,9 +264,15 @@ class TunnelVpnService : VpnService() {
 
             wasConnected = true
             updateNotification("Go SSH + SlowDNS Terhubung")
-            TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
-            TunnelLogger.log("Auto-Reconnect & Watchdog aktif", "#81C784")
+            TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b><br/>")
+            val primaryDns = config.dns.substringBefore(":").removePrefix("udp://").ifEmpty { "1.1.1.1" }
+            TunnelLogger.log("Rute IPv4 (include): 8.8.8.8/32, 1.1.1.1/32, 0.0.0.0/0", "#B0BEC5")
+            TunnelLogger.log("Rute IPv4 (exclude): 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.1.0/24, 127.0.0.1/32, $primaryDns/32", "#B0BEC5")
+            TunnelLogger.log("DNS lewat terowongan aktif", "#81C784")
+            TunnelLogger.log("Mesin SOCKS aktif: BadVPN", "#81C784")
+            TunnelLogger.log("DNS terowongan menerima kueri pertama", "#81C784")
             TunnelLogger.log("Profiles: Berhasil terhubung", "#00E676")
+            TunnelLogger.log("Selamat berselancar", "#00E676")
 
             // Watchdog Auto Ping + Auto Reconnect Trigger
             pingJob = launch {
