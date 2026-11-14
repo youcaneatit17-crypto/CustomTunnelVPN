@@ -11,8 +11,8 @@ android {
         applicationId = "com.custom.tunnel"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -24,13 +24,16 @@ android {
             isMinifyEnabled = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -43,5 +46,4 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("com.trilead:trilead-ssh2:1.0.0-build222")
 }

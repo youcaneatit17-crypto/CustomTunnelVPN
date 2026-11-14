@@ -7,25 +7,18 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
-import com.trilead.ssh2.Connection
-import com.trilead.ssh2.LocalPortForwarder
 import kotlinx.coroutines.*
 import java.io.BufferedReader
-import java.io.DataInputStream
 import java.io.InputStreamReader
-import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.ServerSocket
 import java.net.Socket
 
 class TunnelVpnService : VpnService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var vpnInterface: ParcelFileDescriptor? = null
-    private var slowDnsProcess: Process? = null
+    private var coreProcess: Process? = null
     private var tun2SocksProcess: Process? = null
-    private var sshConnection: Connection? = null
-    private var socksServerSocket: ServerSocket? = null
 
     companion object {
         var isRunning = false
@@ -63,52 +56,51 @@ class TunnelVpnService : VpnService() {
     ) {
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
-            val parts = sshHostPort.split(":")
-            val sshHost = parts.getOrNull(0)?.ifBlank { "127.0.0.1" } ?: "127.0.0.1"
-            val sshPort = parts.getOrNull(1)?.toIntOrNull() ?: 109
             val localSocksPort = 1080
+            val connectedDeferred = CompletableDeferred<Boolean>()
 
-            // 1. Jalankan SlowDNS (libdnstt.so) ke local address sesuai SSH Host:Port
-            TunnelLogger.log("[ss] SlowDNS: Memulai...", "#64B5F6")
-            TunnelLogger.log("[ss] SlowDNS: Menghubungkan ke server ($ns)", "#64B5F6")
+            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS Core...", "#64B5F6")
 
-            val dnsttListenAddr = if (sshHost == "127.0.0.1" || sshHost == "localhost") {
-                "127.0.0.1:$sshPort"
-            } else {
-                "127.0.0.1:2222"
-            }
-
-            val dnsttCmd = arrayOf(
-                "$nativeDir/libdnstt.so",
-                "-udp", "$dns:53",
+            val coreCmd = arrayOf(
+                "$nativeDir/libsshcore.so",
+                "-dnstt", "$nativeDir/libdnstt.so",
+                "-dns", dns,
+                "-ns", ns,
                 "-pubkey", pubkey,
-                ns,
-                dnsttListenAddr
+                "-ssh", sshHostPort,
+                "-user", user,
+                "-pass", pass,
+                "-socks", "127.0.0.1:$localSocksPort"
             )
-            slowDnsProcess = ProcessBuilder(*dnsttCmd).redirectErrorStream(true).start()
-            monitorProcessOutput(slowDnsProcess!!, "SlowDNS")
+            coreProcess = ProcessBuilder(*coreCmd).redirectErrorStream(true).start()
 
-            delay(2000)
-
-            // 2. Hubungkan SSH-2 ke SSH Host:Port (kexTimeout diperpanjang jadi 45000 ms)
-            val targetHost = if (sshHost == "127.0.0.1" || sshHost == "localhost") "127.0.0.1" else sshHost
-            val targetPort = if (sshHost == "127.0.0.1" || sshHost == "localhost") sshPort else sshPort
-
-            TunnelLogger.log("[ss] Menginisialisasi SSH ($targetHost:$targetPort)...", "#64B5F6")
-            TunnelLogger.log("[ss] Memulai core SSH-2", "#64B5F6")
-
-            val conn = Connection(targetHost, targetPort)
-            conn.connect(null, 45000, 45000)
-            val isAuthenticated = conn.authenticateWithPassword(user, pass)
-            if (!isAuthenticated) {
-                throw IllegalStateException("Autentikasi SSH gagal (Username/Password salah)")
+            serviceScope.launch {
+                try {
+                    BufferedReader(InputStreamReader(coreProcess!!.inputStream)).use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            if (line == "READY_CONNECTED") {
+                                connectedDeferred.complete(true)
+                            } else {
+                                TunnelLogger.log(line!!, "#90CAF9")
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    if (!connectedDeferred.isCompleted) {
+                        connectedDeferred.complete(false)
+                    }
+                    if (isRunning) stopTunnel()
+                }
             }
-            sshConnection = conn
 
-            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080
-            startLocalSocks5Server(conn, localSocksPort)
+            val isConnected = withTimeoutOrNull(50000) { connectedDeferred.await() } ?: false
+            if (!isConnected) {
+                throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
+            }
 
-            // 3. Buat Antarmuka Virtual VPN (tun0)
+            // Buat Antarmuka Virtual VPN (tun0)
             val builder = Builder()
                 .setSession("Custom Tunnel VPN")
                 .setMtu(1500)
@@ -120,7 +112,7 @@ class TunnelVpnService : VpnService() {
             vpnInterface = builder.establish()
             val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
 
-            // 4. Jalankan BadVPN tun2socks (libtun2socks.so)
+            // Jalankan BadVPN tun2socks
             TunnelLogger.log("Mesin SOCKS aktif: BadVPN (UDPGW: $udpgw)", "#81C784")
             val tunCmd = arrayOf(
                 "$nativeDir/libtun2socks.so",
@@ -133,7 +125,7 @@ class TunnelVpnService : VpnService() {
                 "--udpgw-remote-server-addr", "127.0.0.1:$udpgw"
             )
             tun2SocksProcess = ProcessBuilder(*tunCmd).redirectErrorStream(true).start()
-            monitorProcessOutput(tun2SocksProcess!!, "BadVPN")
+            monitorProcessOutput(tun2SocksProcess!!, "TUN")
 
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
             TunnelLogger.log("DNS lewat terowongan aktif", "#81C784")
@@ -145,97 +137,6 @@ class TunnelVpnService : VpnService() {
         } catch (e: Exception) {
             TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
             stopTunnel()
-        }
-    }
-
-    private fun startLocalSocks5Server(conn: Connection, port: Int) {
-        socksServerSocket = ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))
-        serviceScope.launch {
-            while (isRunning && socksServerSocket?.isClosed == false) {
-                try {
-                    val client = socksServerSocket!!.accept()
-                    launch { handleSocks5Client(client, conn) }
-                } catch (_: Exception) { }
-            }
-        }
-    }
-
-    private fun findFreeLocalPort(): Int {
-        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { socket ->
-            return socket.localPort
-        }
-    }
-
-    private suspend fun handleSocks5Client(client: Socket, conn: Connection) = withContext(Dispatchers.IO) {
-        var lpf: LocalPortForwarder? = null
-        var forwardSocket: Socket? = null
-        try {
-            val input = DataInputStream(client.getInputStream())
-            val output = client.getOutputStream()
-
-            val ver = input.readByte().toInt()
-            if (ver != 5) { client.close(); return@withContext }
-            val nMethods = input.readUnsignedByte()
-            val methods = ByteArray(nMethods)
-            input.readFully(methods)
-            output.write(byteArrayOf(0x05, 0x00))
-            output.flush()
-
-            input.readByte()
-            val cmd = input.readByte().toInt()
-            input.readByte()
-            val atyp = input.readByte().toInt()
-
-            val destHost: String = when (atyp) {
-                1 -> {
-                    val addr = ByteArray(4)
-                    input.readFully(addr)
-                    InetAddress.getByAddress(addr).hostAddress ?: ""
-                }
-                3 -> {
-                    val len = input.readUnsignedByte()
-                    val domain = ByteArray(len)
-                    input.readFully(domain)
-                    String(domain)
-                }
-                4 -> {
-                    val addr = ByteArray(16)
-                    input.readFully(addr)
-                    InetAddress.getByAddress(addr).hostAddress ?: ""
-                }
-                else -> { client.close(); return@withContext }
-            }
-            val destPort = input.readUnsignedShort()
-
-            if (cmd != 1) {
-                output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
-                client.close()
-                return@withContext
-            }
-
-            val freePort = findFreeLocalPort()
-            lpf = conn.createLocalPortForwarder(freePort, destHost, destPort)
-            forwardSocket = Socket()
-            forwardSocket.connect(InetSocketAddress("127.0.0.1", freePort), 15000)
-
-            output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
-            output.flush()
-
-            val fwdIn = forwardSocket.getInputStream()
-            val fwdOut = forwardSocket.getOutputStream()
-
-            val job1 = launch {
-                try { input.copyTo(fwdOut) } catch (_: Exception) {}
-            }
-            val job2 = launch {
-                try { fwdIn.copyTo(output) } catch (_: Exception) {}
-            }
-            joinAll(job1, job2)
-        } catch (_: Exception) {
-        } finally {
-            try { forwardSocket?.close() } catch (_: Exception) {}
-            try { lpf?.close() } catch (_: Exception) {}
-            try { client.close() } catch (_: Exception) {}
         }
     }
 
@@ -271,11 +172,10 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun stopTunnel() {
+        if (!isRunning) return
         isRunning = false
-        try { socksServerSocket?.close() } catch (_: Exception) {}
-        try { sshConnection?.close() } catch (_: Exception) {}
         try { tun2SocksProcess?.destroy() } catch (_: Exception) {}
-        try { slowDnsProcess?.destroy() } catch (_: Exception) {}
+        try { coreProcess?.destroy() } catch (_: Exception) {}
         try { vpnInterface?.close() } catch (_: Exception) {}
         TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -292,7 +192,7 @@ class TunnelVpnService : VpnService() {
         }
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Custom Tunnel Aktif")
-            .setContentText("SlowDNS + SSH + BadVPN berjalan")
+            .setContentText("Go SSH + SlowDNS + BadVPN berjalan")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .build()
         startForeground(1, notification)
