@@ -83,6 +83,8 @@ class MainActivity : AppCompatActivity() {
         spDnsType.adapter = adapter
 
         loadSavedConfig()
+        updateButtonState()
+        tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
@@ -120,6 +122,11 @@ class MainActivity : AppCompatActivity() {
                 prepareAndStartVpn()
             }
         }
+    }
+
+    override fun onDestroy() {
+        TunnelLogger.onLogUpdated = null
+        super.onDestroy()
     }
 
     private fun prepareAndStartVpn() {

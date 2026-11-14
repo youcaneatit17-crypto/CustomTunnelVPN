@@ -13,6 +13,7 @@ import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.Socket
 
 class TunnelVpnService : VpnService() {
@@ -40,13 +41,12 @@ class TunnelVpnService : VpnService() {
         val sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:22"
         val user = intent?.getStringExtra("user") ?: ""
         val pass = intent?.getStringExtra("pass") ?: ""
-        val udpgw = intent?.getStringExtra("udpgw") ?: "7300"
 
         startForegroundNotification()
         isRunning = true
 
         serviceScope.launch {
-            startTunnelSequence(dnsType, dns, ns, pubkey, sshHostPort, user, pass, udpgw)
+            startTunnelSequence(dnsType, dns, ns, pubkey, sshHostPort, user, pass)
         }
 
         return START_STICKY
@@ -54,7 +54,7 @@ class TunnelVpnService : VpnService() {
 
     private suspend fun startTunnelSequence(
         dnsType: String, dns: String, ns: String, pubkey: String,
-        sshHostPort: String, user: String, pass: String, udpgw: String
+        sshHostPort: String, user: String, pass: String
     ) {
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
@@ -106,7 +106,6 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
 
-            // Buat Antarmuka Virtual VPN (tun0)
             val builder = Builder()
                 .setSession("Custom Tunnel VPN")
                 .setMtu(1500)
@@ -119,7 +118,6 @@ class TunnelVpnService : VpnService() {
             vpnInterface = builder.establish()
             val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
 
-            // Kirim FileDescriptor TUN asli (O_RDWR) ke Go core lewat Unix Domain Socket SCM_RIGHTS
             LocalSocket().use { clientSocket ->
                 clientSocket.connect(LocalSocketAddress(tunSockName, LocalSocketAddress.Namespace.ABSTRACT))
                 clientSocket.setFileDescriptorsForSend(arrayOf(pfd.fileDescriptor))
@@ -132,7 +130,7 @@ class TunnelVpnService : VpnService() {
             TunnelLogger.log("Profiles: Berhasil terhubung", "#00E676")
             TunnelLogger.log("Selamat berselancar", "#00E676")
 
-            startAutoPing()
+            startAutoPing(localSocksPort)
 
         } catch (e: Exception) {
             TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
@@ -140,19 +138,20 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun startAutoPing() {
+    private fun startAutoPing(socksPort: Int) {
         serviceScope.launch {
+            val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
             while (isRunning) {
-                delay(4000)
+                delay(5000)
                 try {
                     val start = System.currentTimeMillis()
-                    Socket().use { socket ->
-                        socket.connect(InetSocketAddress("1.1.1.1", 80), 5000)
+                    Socket(socksProxy).use { socket ->
+                        socket.connect(InetSocketAddress.createUnresolved("1.1.1.1", 80), 8000)
                     }
                     val ping = System.currentTimeMillis() - start
-                    TunnelLogger.log("Auto Ping: $ping ms", "#81C784")
+                    TunnelLogger.log("Auto Ping (Tunnel): $ping ms", "#81C784")
                 } catch (_: Exception) {
-                    TunnelLogger.log("Auto Ping: Timeout", "#FFB74D")
+                    TunnelLogger.log("Auto Ping (Tunnel): Timeout", "#FFB74D")
                 }
             }
         }
