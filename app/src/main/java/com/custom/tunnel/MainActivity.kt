@@ -1,26 +1,27 @@
 package com.custom.tunnel
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.Html
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.Spinner
-import android.widget.TextView
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.tabs.TabLayout
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
@@ -37,14 +38,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRefresh: Button
     private lateinit var btnCleanLog: Button
     private lateinit var tvLogs: TextView
+    private lateinit var tvHeaderStatus: TextView
+    private lateinit var tvTunnelStatus: TextView
     private lateinit var layoutUtama: ScrollView
     private lateinit var layoutLog: LinearLayout
+    private lateinit var layoutProfil: ScrollView
     private lateinit var scrollLog: ScrollView
     private lateinit var tabLayout: TabLayout
+
+    private lateinit var navBeranda: LinearLayout
+    private lateinit var navProfil: LinearLayout
+    private lateinit var pillBeranda: TextView
+    private lateinit var pillProfil: TextView
+    private lateinit var txtNavBeranda: TextView
+    private lateinit var txtNavProfil: TextView
+
+    private lateinit var etNewProfileName: EditText
+    private lateinit var btnSaveProfile: Button
+    private lateinit var profilesContainer: LinearLayout
+    private lateinit var etConfigJson: EditText
+    private lateinit var btnExportJson: Button
+    private lateinit var btnImportJson: Button
 
     private val dnsTypes = arrayOf("NULL", "AUTO", "TXT")
     private val uiHandler = Handler(Looper.getMainLooper())
     private var logRenderPending = false
+    private var currentNav = "beranda"
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -73,10 +92,27 @@ class MainActivity : AppCompatActivity() {
         btnRefresh = findViewById(R.id.btnRefresh)
         btnCleanLog = findViewById(R.id.btnCleanLog)
         tvLogs = findViewById(R.id.tvLogs)
+        tvHeaderStatus = findViewById(R.id.tvHeaderStatus)
+        tvTunnelStatus = findViewById(R.id.tvTunnelStatus)
         layoutUtama = findViewById(R.id.layoutUtama)
         layoutLog = findViewById(R.id.layoutLog)
+        layoutProfil = findViewById(R.id.layoutProfil)
         scrollLog = findViewById(R.id.scrollLog)
         tabLayout = findViewById(R.id.tabLayout)
+
+        navBeranda = findViewById(R.id.navBeranda)
+        navProfil = findViewById(R.id.navProfil)
+        pillBeranda = findViewById(R.id.pillBeranda)
+        pillProfil = findViewById(R.id.pillProfil)
+        txtNavBeranda = findViewById(R.id.txtNavBeranda)
+        txtNavProfil = findViewById(R.id.txtNavProfil)
+
+        etNewProfileName = findViewById(R.id.etNewProfileName)
+        btnSaveProfile = findViewById(R.id.btnSaveProfile)
+        profilesContainer = findViewById(R.id.profilesContainer)
+        etConfigJson = findViewById(R.id.etConfigJson)
+        btnExportJson = findViewById(R.id.btnExportJson)
+        btnImportJson = findViewById(R.id.btnImportJson)
 
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, dnsTypes) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -88,7 +124,7 @@ class MainActivity : AppCompatActivity() {
             override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
                 return (super.getDropDownView(position, convertView, parent) as TextView).apply {
                     setTextColor(Color.WHITE)
-                    setBackgroundColor(Color.parseColor("#1E2126"))
+                    setBackgroundColor(Color.parseColor("#1D2025"))
                     setPadding(24, 24, 24, 24)
                 }
             }
@@ -96,11 +132,16 @@ class MainActivity : AppCompatActivity() {
         spDnsType.adapter = adapter
 
         loadSavedConfig()
+        renderProfilesList()
         updateButtonState()
         renderLogsNow()
 
+        navBeranda.setOnClickListener { switchNav("beranda") }
+        navProfil.setOnClickListener { switchNav("profil") }
+
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
+                if (currentNav != "beranda") return
                 if (tab?.position == 0) {
                     layoutUtama.visibility = View.VISIBLE
                     layoutLog.visibility = View.GONE
@@ -133,9 +174,7 @@ class MainActivity : AppCompatActivity() {
                     action = TunnelVpnService.ACTION_STOP
                 }
                 startService(stopIntent)
-                btnConnect.text = "HUBUNGKAN"
-                btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
-                btnRefresh.visibility = View.GONE
+                updateButtonState()
             } else {
                 saveConfig()
                 tabLayout.getTabAt(1)?.select()
@@ -156,6 +195,200 @@ class MainActivity : AppCompatActivity() {
         btnCleanLog.setOnClickListener {
             TunnelLogger.clear()
             tvLogs.text = ""
+        }
+
+        btnSaveProfile.setOnClickListener { saveNewProfile() }
+        btnExportJson.setOnClickListener { exportConfigToJson() }
+        btnImportJson.setOnClickListener { importConfigFromJson() }
+    }
+
+    private fun switchNav(target: String) {
+        currentNav = target
+        if (target == "beranda") {
+            tabLayout.visibility = View.VISIBLE
+            layoutProfil.visibility = View.GONE
+            if (tabLayout.selectedTabPosition == 0) {
+                layoutUtama.visibility = View.VISIBLE
+                layoutLog.visibility = View.GONE
+            } else {
+                layoutUtama.visibility = View.GONE
+                layoutLog.visibility = View.VISIBLE
+            }
+            pillBeranda.setBackgroundResource(R.drawable.bg_nav_pill)
+            pillProfil.background = null
+            txtNavBeranda.setTextColor(Color.parseColor("#E5E7EB"))
+            txtNavProfil.setTextColor(Color.parseColor("#9CA3AF"))
+        } else {
+            tabLayout.visibility = View.GONE
+            layoutUtama.visibility = View.GONE
+            layoutLog.visibility = View.GONE
+            layoutProfil.visibility = View.VISIBLE
+            renderProfilesList()
+            pillProfil.setBackgroundResource(R.drawable.bg_nav_pill)
+            pillBeranda.background = null
+            txtNavProfil.setTextColor(Color.parseColor("#E5E7EB"))
+            txtNavBeranda.setTextColor(Color.parseColor("#9CA3AF"))
+        }
+    }
+
+    private fun buildCurrentJson(): JSONObject {
+        return JSONObject().apply {
+            put("dnsTypeIdx", spDnsType.selectedItemPosition)
+            put("dns", etDns.text.toString().trim())
+            put("ns", etNs.text.toString().trim())
+            put("pubkey", etPubkey.text.toString().trim())
+            put("sessions", etSessions.text.toString().trim())
+            put("sshHostPort", etSshHostPort.text.toString().trim())
+            put("user", etSshUser.text.toString().trim())
+            put("pass", etSshPass.text.toString().trim())
+            put("udpgw", etUdpgw.text.toString().trim())
+        }
+    }
+
+    private fun applyJsonConfig(obj: JSONObject) {
+        spDnsType.setSelection(obj.optInt("dnsTypeIdx", 0).coerceIn(0, dnsTypes.lastIndex))
+        etDns.setText(obj.optString("dns", "1.1.1.1"))
+        etNs.setText(obj.optString("ns", ""))
+        etPubkey.setText(obj.optString("pubkey", ""))
+        etSessions.setText(obj.optString("sessions", "1"))
+        etSshHostPort.setText(obj.optString("sshHostPort", "127.0.0.1:22"))
+        etSshUser.setText(obj.optString("user", ""))
+        etSshPass.setText(obj.optString("pass", ""))
+        etUdpgw.setText(obj.optString("udpgw", "7300"))
+        saveConfig()
+    }
+
+    private fun saveNewProfile() {
+        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        val arr = JSONArray(prefs.getString("list", "[]"))
+        val name = etNewProfileName.text.toString().trim().ifEmpty {
+            "Profil #${arr.length() + 1} (${etSshUser.text.toString().ifEmpty { "SSH" }})"
+        }
+        val item = buildCurrentJson().apply {
+            put("id", System.currentTimeMillis().toString())
+            put("name", name)
+        }
+        val newArr = JSONArray().apply {
+            put(item)
+            for (i in 0 until arr.length()) put(arr.getJSONObject(i))
+        }
+        prefs.edit().putString("list", newArr.toString()).apply()
+        etNewProfileName.setText("")
+        renderProfilesList()
+        Toast.makeText(this, "Profil "$name" disimpan!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renderProfilesList() {
+        profilesContainer.removeAllViews()
+        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        val arr = JSONArray(prefs.getString("list", "[]"))
+        if (arr.length() == 0) {
+            val emptyTv = TextView(this).apply {
+                text = "Belum ada profil tersimpan. Isi form di Beranda lalu simpan di sini."
+                setTextColor(Color.parseColor("#6B7280"))
+                textSize = 12f
+                setPadding(8, 8, 8, 16)
+            }
+            profilesContainer.addView(emptyTv)
+            return
+        }
+
+        for (i in 0 until arr.length()) {
+            val item = arr.getJSONObject(i)
+            val id = item.optString("id")
+            val name = item.optString("name", "Profil")
+            val summary = "${item.optString("user")} @ ${item.optString("ns")} (${dnsTypes[item.optInt("dnsTypeIdx", 0)]})"
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.bg_card)
+                setPadding(32, 28, 28, 28)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 20 }
+            }
+
+            val infoCol = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val tvName = TextView(this).apply {
+                text = name
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+            }
+            val tvSub = TextView(this).apply {
+                text = summary
+                setTextColor(Color.parseColor("#9CA3AF"))
+                textSize = 11f
+                typeface = Typeface.MONOSPACE
+            }
+            infoCol.addView(tvName)
+            infoCol.addView(tvSub)
+
+            val btnLoad = Button(this).apply {
+                text = "MUAT"
+                textSize = 11f
+                setTextColor(Color.parseColor("#6EA8FE"))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1E293B"))
+                setOnClickListener {
+                    applyJsonConfig(item)
+                    switchNav("beranda")
+                    tabLayout.getTabAt(0)?.select()
+                    Toast.makeText(this@MainActivity, "Profil "$name" dimuat", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            val btnDel = Button(this).apply {
+                text = "✕"
+                textSize = 12f
+                setTextColor(Color.parseColor("#F87171"))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#27272A"))
+                layoutParams = LinearLayout.LayoutParams(110, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    leftMargin = 12
+                }
+                setOnClickListener {
+                    val updated = JSONArray()
+                    for (j in 0 until arr.length()) {
+                        if (arr.getJSONObject(j).optString("id") != id) updated.put(arr.getJSONObject(j))
+                    }
+                    prefs.edit().putString("list", updated.toString()).apply()
+                    renderProfilesList()
+                }
+            }
+
+            card.addView(infoCol)
+            card.addView(btnLoad)
+            card.addView(btnDel)
+            profilesContainer.addView(card)
+        }
+    }
+
+    private fun exportConfigToJson() {
+        val jsonStr = buildCurrentJson().toString(2)
+        etConfigJson.setText(jsonStr)
+        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cb.setPrimaryClip(ClipData.newPlainText("CustomTunnelConfig", jsonStr))
+        Toast.makeText(this, "Config JSON disalin ke clipboard!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun importConfigFromJson() {
+        val raw = etConfigJson.text.toString().trim()
+        if (raw.isEmpty()) {
+            Toast.makeText(this, "Tempel JSON config dulu", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val obj = JSONObject(raw)
+            applyJsonConfig(obj)
+            switchNav("beranda")
+            tabLayout.getTabAt(0)?.select()
+            Toast.makeText(this, "Config berhasil diimpor!", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Format JSON tidak valid!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -185,7 +418,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTunnelService() {
-        val sessionCount = (etSessions.text.toString().trim().toIntOrNull() ?: 2).coerceIn(1, 4)
+        val sessionCount = (etSessions.text.toString().trim().toIntOrNull() ?: 1).coerceIn(1, 4)
         val intent = Intent(this, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_START
             putExtra("dnsType", dnsTypes[spDnsType.selectedItemPosition])
@@ -203,20 +436,28 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(intent)
         }
-        btnConnect.text = "PUTUSKAN"
-        btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
-        btnRefresh.visibility = View.VISIBLE
+        updateButtonState()
     }
 
     private fun updateButtonState() {
         if (TunnelVpnService.isRunning) {
-            btnConnect.text = "PUTUSKAN"
-            btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+            btnConnect.text = "PUTUSKAN KONEKSI"
+            btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626"))
             btnRefresh.visibility = View.VISIBLE
+            tvHeaderStatus.text = "CONNECTED"
+            tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
+            tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
+            tvTunnelStatus.text = "Terhubung (Terlindungi)"
+            tvTunnelStatus.setTextColor(Color.parseColor("#4ADE80"))
         } else {
             btnConnect.text = "HUBUNGKAN"
-            btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+            btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2563EB"))
             btnRefresh.visibility = View.GONE
+            tvHeaderStatus.text = "OFFLINE"
+            tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
+            tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
+            tvTunnelStatus.text = "Terputus (Siap)"
+            tvTunnelStatus.setTextColor(Color.parseColor("#E5E7EB"))
         }
     }
 
@@ -241,7 +482,7 @@ class MainActivity : AppCompatActivity() {
         etDns.setText(prefs.getString("dns", "1.1.1.1"))
         etNs.setText(prefs.getString("ns", ""))
         etPubkey.setText(prefs.getString("pubkey", ""))
-        etSessions.setText(prefs.getString("sessions", "2"))
+        etSessions.setText(prefs.getString("sessions", "1"))
         etSshHostPort.setText(prefs.getString("sshHostPort", "127.0.0.1:22"))
         etSshUser.setText(prefs.getString("user", ""))
         etSshPass.setText(prefs.getString("pass", ""))
