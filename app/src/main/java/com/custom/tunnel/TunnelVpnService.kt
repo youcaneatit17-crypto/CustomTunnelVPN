@@ -263,7 +263,7 @@ class TunnelVpnService : VpnService() {
             logJob?.cancel()
         }
 
-        return wasConnected
+        wasConnected
     }
 
     private fun triggerSeamlessRefresh() {
