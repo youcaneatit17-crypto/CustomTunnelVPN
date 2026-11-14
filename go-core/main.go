@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"flag"
@@ -85,11 +86,22 @@ func (m *tunnelManager) getClient() *ssh.Client {
 	return m.list[idx].sshClient
 }
 
+func init() {
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			return d.DialContext(ctx, "udp", "1.1.1.1:53")
+		},
+	}
+}
+
 func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 	targetDialAddr := m.sshAddr
 	var dnsttCmd *exec.Cmd
 
-	if strings.HasPrefix(m.sshAddr, "127.0.0.1:") || strings.HasPrefix(m.sshAddr, "localhost:") {
+	useSlowDns := (strings.TrimSpace(m.ns) != "" && strings.TrimSpace(m.pubkey) != "") || strings.HasPrefix(m.sshAddr, "127.0.0.1:") || strings.HasPrefix(m.sshAddr, "localhost:")
+	if useSlowDns {
 		freeAddr, err := getFreeLocalAddr()
 		if err != nil {
 			return nil, fmt.Errorf("gagal mencari port lokal: %v", err)
