@@ -275,7 +275,7 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString("list", newArr.toString()).apply()
         etNewProfileName.setText("")
         renderProfilesList()
-        Toast.makeText(this, "Profil "$name" disimpan!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Profil '$name' disimpan!", Toast.LENGTH_SHORT).show()
     }
 
     private fun renderProfilesList() {
@@ -338,7 +338,7 @@ class MainActivity : AppCompatActivity() {
                     applyJsonConfig(item)
                     switchNav("beranda")
                     tabLayout.getTabAt(0)?.select()
-                    Toast.makeText(this@MainActivity, "Profil "$name" dimuat", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Profil '$name' dimuat", Toast.LENGTH_SHORT).show()
                 }
             }
 
