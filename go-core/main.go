@@ -181,8 +181,6 @@ func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 		log.Printf("[ss] Algoritma pertukaran kunci: curve25519-sha256 / diffie-hellman-group14-sha1")
 		log.Printf("[ss] Menggunakan algoritma: aes256-ctr / chacha20-poly1305@openssh.com")
 	}
-		return nil, fmt.Errorf("gagal terhubung SSH: %v", err)
-	}
 
 	return &tunnelSession{
 		id:        id,
