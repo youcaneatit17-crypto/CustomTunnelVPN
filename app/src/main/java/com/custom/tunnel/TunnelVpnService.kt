@@ -6,12 +6,10 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import android.system.Os
-import android.system.OsConstants
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.BufferedReader
-import java.io.FileDescriptor
+import java.io.File
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -21,7 +19,6 @@ class TunnelVpnService : VpnService() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var vpnInterface: ParcelFileDescriptor? = null
     private var coreProcess: Process? = null
-    private var tun2SocksProcess: Process? = null
 
     companion object {
         var isRunning = false
@@ -63,7 +60,20 @@ class TunnelVpnService : VpnService() {
             val localSocksPort = 1080
             val connectedDeferred = CompletableDeferred<Boolean>()
 
-            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS Core...", "#64B5F6")
+            // 1. Buat Antarmuka Virtual VPN (tun0) lebih dulu
+            val builder = Builder()
+                .setSession("Custom Tunnel VPN")
+                .setMtu(1500)
+                .addAddress("10.0.0.2", 24)
+                .addRoute("0.0.0.0", 0)
+                .addDnsServer("8.8.8.8")
+                .addDnsServer("1.1.1.1")
+                .addDisallowedApplication(packageName)
+
+            vpnInterface = builder.establish()
+            val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
+
+            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS + TUN Core...", "#64B5F6")
 
             val coreCmd = arrayOf(
                 "$nativeDir/libsshcore.so",
@@ -75,9 +85,15 @@ class TunnelVpnService : VpnService() {
                 "-ssh", sshHostPort,
                 "-user", user,
                 "-pass", pass,
-                "-socks", "127.0.0.1:$localSocksPort"
+                "-socks", "127.0.0.1:$localSocksPort",
+                "-tun"
             )
-            coreProcess = ProcessBuilder(*coreCmd).redirectErrorStream(true).start()
+
+            // Arahkan /proc/self/fd/$tunFd menjadi stdin (fd://0) bagi proses libsshcore.so
+            coreProcess = ProcessBuilder(*coreCmd)
+                .redirectInput(File("/proc/self/fd/$tunFd"))
+                .redirectErrorStream(true)
+                .start()
 
             serviceScope.launch {
                 try {
@@ -105,37 +121,6 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
 
-            // Buat Antarmuka Virtual VPN (tun0)
-            val builder = Builder()
-                .setSession("Custom Tunnel VPN")
-                .setMtu(1500)
-                .addAddress("10.0.0.2", 24)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
-                .addDisallowedApplication(packageName)
-
-            vpnInterface = builder.establish()
-            val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
-            val rawFd: FileDescriptor = pfd.fileDescriptor
-
-            // Hapus flag FD_CLOEXEC agar file descriptor tun0 tetap terbuka untuk proses libtun2socks.so
-            val flags = Os.fcntlInt(rawFd, OsConstants.F_GETFD, 0)
-            Os.fcntlInt(rawFd, OsConstants.F_SETFD, flags and OsConstants.FD_CLOEXEC.inv())
-            val tunFd = pfd.fd
-
-            // Jalankan xjasonlyu/tun2socks dengan flag panjang (--) yang benar
-            TunnelLogger.log("Mesin TUN aktif: Go tun2socks (fd://$tunFd)", "#81C784")
-            val tunCmd = arrayOf(
-                "$nativeDir/libtun2socks.so",
-                "--device", "fd://$tunFd",
-                "--proxy", "socks5://127.0.0.1:$localSocksPort",
-                "--mtu", "1500",
-                "--loglevel", "warn"
-            )
-            tun2SocksProcess = ProcessBuilder(*tunCmd).redirectErrorStream(true).start()
-            monitorProcessOutput(tun2SocksProcess!!, "TUN")
-
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
             TunnelLogger.log("DNS lewat terowongan aktif", "#81C784")
             TunnelLogger.log("Profiles: Berhasil terhubung", "#00E676")
@@ -146,19 +131,6 @@ class TunnelVpnService : VpnService() {
         } catch (e: Exception) {
             TunnelLogger.log("Error Koneksi: ${e.message}", "#EF5350")
             stopTunnel()
-        }
-    }
-
-    private fun monitorProcessOutput(process: Process, tag: String) {
-        serviceScope.launch {
-            try {
-                BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        TunnelLogger.log("[$tag] $line", "#9E9E9E")
-                    }
-                }
-            } catch (_: Exception) { }
         }
     }
 
@@ -183,7 +155,6 @@ class TunnelVpnService : VpnService() {
     private fun stopTunnel() {
         if (!isRunning) return
         isRunning = false
-        try { tun2SocksProcess?.destroy() } catch (_: Exception) {}
         try { coreProcess?.destroy() } catch (_: Exception) {}
         try { vpnInterface?.close() } catch (_: Exception) {}
         TunnelLogger.log("Koneksi VPN diputuskan.", "#EF5350")

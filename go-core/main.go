@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/armon/go-socks5"
+	"github.com/xjasonlyu/tun2socks/v2/engine"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -27,7 +28,7 @@ func getFreeLocalAddr() (string, error) {
 
 func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")
-	dns := flag.String("dns", "8.8.8.8", "DNS resolver")
+	dns := flag.String("dns", "1.1.1.1", "DNS resolver")
 	dnsType := flag.String("type", "NULL", "DNS record type (NULL, AUTO, TXT)")
 	ns := flag.String("ns", "", "SlowDNS Nameserver")
 	pubkey := flag.String("pubkey", "", "SlowDNS Public Key")
@@ -35,6 +36,7 @@ func main() {
 	user := flag.String("user", "", "SSH Username")
 	pass := flag.String("pass", "", "SSH Password")
 	socksAddr := flag.String("socks", "127.0.0.1:1080", "Local SOCKS5 listen address")
+	withTun := flag.Bool("tun", false, "Attach tun2socks to stdin (fd://0)")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -42,7 +44,7 @@ func main() {
 
 	targetDialAddr := *sshAddr
 
-	// 1. Jalankan SlowDNS (libdnstt.so 1FTunnel) dengan -type NULL / AUTO / TXT
+	// 1. Jalankan SlowDNS (libdnstt.so 1FTunnel)
 	if strings.HasPrefix(*sshAddr, "127.0.0.1:") || strings.HasPrefix(*sshAddr, "localhost:") {
 		freeAddr, err := getFreeLocalAddr()
 		if err != nil {
@@ -55,15 +57,9 @@ func main() {
 		switch {
 		case strings.HasPrefix(resolverVal, "https://"):
 			resolverFlag = "-doh"
-		case strings.HasPrefix(resolverVal, "tls://"):
+		case strings.HasPrefix(resolverVal, "tls://"), strings.HasPrefix(resolverVal, "dot://"):
 			resolverFlag = "-dot"
-			resolverVal = strings.TrimPrefix(resolverVal, "tls://")
-			if !strings.Contains(resolverVal, ":") {
-				resolverVal += ":853"
-			}
-		case strings.HasPrefix(resolverVal, "dot://"):
-			resolverFlag = "-dot"
-			resolverVal = strings.TrimPrefix(resolverVal, "dot://")
+			resolverVal = strings.TrimPrefix(strings.TrimPrefix(resolverVal, "tls://"), "dot://")
 			if !strings.Contains(resolverVal, ":") {
 				resolverVal += ":853"
 			}
@@ -91,7 +87,7 @@ func main() {
 		time.Sleep(1500 * time.Millisecond)
 	}
 
-	// 2. Hubungkan Modern SSH-2 Client
+	// 2. Hubungkan SSH-2 Client
 	log.Printf("[SSH] Menghubungkan ke %s sebagai %s...", targetDialAddr, *user)
 	config := &ssh.ClientConfig{
 		User: *user,
@@ -109,7 +105,6 @@ func main() {
 	defer sshClient.Close()
 	log.Println("[SSH] Tersambung! Membuka SOCKS5 forwarding...")
 
-	// Keep-Alive setiap 15 detik
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
@@ -122,7 +117,7 @@ func main() {
 		}
 	}()
 
-	// 3. Jalankan SOCKS5 Server
+	// 3. Jalankan SOCKS5 Server di background
 	conf := &socks5.Config{
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return sshClient.Dial(network, addr)
@@ -133,8 +128,27 @@ func main() {
 		log.Fatalf("[SOCKS5] Gagal inisialisasi: %v", err)
 	}
 
-	fmt.Println("READY_CONNECTED")
-	if err := server.ListenAndServe("tcp", *socksAddr); err != nil {
-		log.Fatalf("[SOCKS5] Error: %v", err)
+	go func() {
+		if err := server.ListenAndServe("tcp", *socksAddr); err != nil {
+			log.Fatalf("[SOCKS5] Error: %v", err)
+		}
+	}()
+	time.Sleep(200 * time.Millisecond)
+
+	// 4. Jalankan tun2socks langsung pada fd://0 (stdin yang diwarisi dari TUN interface)
+	if *withTun {
+		key := &engine.Key{
+			MTU:      1500,
+			Proxy:    "socks5://" + *socksAddr,
+			Device:   "fd://0",
+			LogLevel: "warn",
+		}
+		engine.Insert(key)
+		engine.Start()
+		defer engine.Stop()
+		log.Println("[TUN] Engine tun2socks aktif pada fd://0")
 	}
+
+	fmt.Println("READY_CONNECTED")
+	select {}
 }
