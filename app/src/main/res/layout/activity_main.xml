@@ -100,6 +100,19 @@
                 android:textColorHint="#757575"
                 android:background="#1E2126"
                 android:padding="12dp"
+                android:layout_marginBottom="10dp" />
+
+            <EditText
+                android:id="@+id/etSessions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Jumlah Sesi Paralel (1-4, default: 2)"
+                android:text="2"
+                android:inputType="number"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#757575"
+                android:background="#1E2126"
+                android:padding="12dp"
                 android:layout_marginBottom="16dp" />
 
             <TextView
@@ -167,24 +180,54 @@
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#2E7D32" />
+
+            <Button
+                android:id="@+id/btnRefresh"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:text="REFRESH JALUR (ANTI-LEMOT)"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#1565C0"
+                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 
-    <ScrollView
+    <LinearLayout
         android:id="@+id/layoutLog"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:orientation="vertical"
         android:padding="12dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/tvLogs"
+        <Button
+            android:id="@+id/btnCleanLog"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
+            android:layout_height="40dp"
+            android:layout_marginBottom="8dp"
+            android:text="CLEAN LOG"
             android:textSize="12sp"
-            android:lineSpacingExtra="4dp"
-            android:textColor="#E0E0E0" />
-    </ScrollView>
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#37474F" />
+
+        <ScrollView
+            android:id="@+id/scrollLog"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <TextView
+                android:id="@+id/tvLogs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:lineSpacingExtra="4dp"
+                android:textColor="#E0E0E0" />
+        </ScrollView>
+    </LinearLayout>
 
 </LinearLayout>

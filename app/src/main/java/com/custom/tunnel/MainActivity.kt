@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
@@ -27,14 +28,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etDns: EditText
     private lateinit var etNs: EditText
     private lateinit var etPubkey: EditText
+    private lateinit var etSessions: EditText
     private lateinit var etSshHostPort: EditText
     private lateinit var etSshUser: EditText
     private lateinit var etSshPass: EditText
     private lateinit var etUdpgw: EditText
     private lateinit var btnConnect: Button
+    private lateinit var btnRefresh: Button
+    private lateinit var btnCleanLog: Button
     private lateinit var tvLogs: TextView
     private lateinit var layoutUtama: ScrollView
-    private lateinit var layoutLog: ScrollView
+    private lateinit var layoutLog: LinearLayout
+    private lateinit var scrollLog: ScrollView
     private lateinit var tabLayout: TabLayout
 
     private val dnsTypes = arrayOf("NULL", "AUTO", "TXT")
@@ -59,14 +64,18 @@ class MainActivity : AppCompatActivity() {
         etDns = findViewById(R.id.etDns)
         etNs = findViewById(R.id.etNs)
         etPubkey = findViewById(R.id.etPubkey)
+        etSessions = findViewById(R.id.etSessions)
         etSshHostPort = findViewById(R.id.etSshHostPort)
         etSshUser = findViewById(R.id.etSshUser)
         etSshPass = findViewById(R.id.etSshPass)
         etUdpgw = findViewById(R.id.etUdpgw)
         btnConnect = findViewById(R.id.btnConnect)
+        btnRefresh = findViewById(R.id.btnRefresh)
+        btnCleanLog = findViewById(R.id.btnCleanLog)
         tvLogs = findViewById(R.id.tvLogs)
         layoutUtama = findViewById(R.id.layoutUtama)
         layoutLog = findViewById(R.id.layoutLog)
+        scrollLog = findViewById(R.id.scrollLog)
         tabLayout = findViewById(R.id.tabLayout)
 
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, dnsTypes) {
@@ -126,17 +135,33 @@ class MainActivity : AppCompatActivity() {
                 startService(stopIntent)
                 btnConnect.text = "HUBUNGKAN"
                 btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+                btnRefresh.visibility = View.GONE
             } else {
                 saveConfig()
                 tabLayout.getTabAt(1)?.select()
                 prepareAndStartVpn()
             }
         }
+
+        btnRefresh.setOnClickListener {
+            if (TunnelVpnService.isRunning) {
+                tabLayout.getTabAt(1)?.select()
+                val refreshIntent = Intent(this, TunnelVpnService::class.java).apply {
+                    action = TunnelVpnService.ACTION_REFRESH
+                }
+                startService(refreshIntent)
+            }
+        }
+
+        btnCleanLog.setOnClickListener {
+            TunnelLogger.clear()
+            tvLogs.text = ""
+        }
     }
 
     private fun renderLogsNow() {
         tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
-        layoutLog.post { layoutLog.fullScroll(View.FOCUS_DOWN) }
+        scrollLog.post { scrollLog.fullScroll(View.FOCUS_DOWN) }
     }
 
     override fun onDestroy() {
@@ -160,12 +185,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTunnelService() {
+        val sessionCount = (etSessions.text.toString().trim().toIntOrNull() ?: 2).coerceIn(1, 4)
         val intent = Intent(this, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_START
             putExtra("dnsType", dnsTypes[spDnsType.selectedItemPosition])
             putExtra("dns", etDns.text.toString().trim())
             putExtra("ns", etNs.text.toString().trim())
             putExtra("pubkey", etPubkey.text.toString().trim())
+            putExtra("sessions", sessionCount)
             putExtra("sshHostPort", etSshHostPort.text.toString().trim())
             putExtra("user", etSshUser.text.toString().trim())
             putExtra("pass", etSshPass.text.toString().trim())
@@ -178,15 +205,18 @@ class MainActivity : AppCompatActivity() {
         }
         btnConnect.text = "PUTUSKAN"
         btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+        btnRefresh.visibility = View.VISIBLE
     }
 
     private fun updateButtonState() {
         if (TunnelVpnService.isRunning) {
             btnConnect.text = "PUTUSKAN"
             btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+            btnRefresh.visibility = View.VISIBLE
         } else {
             btnConnect.text = "HUBUNGKAN"
             btnConnect.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+            btnRefresh.visibility = View.GONE
         }
     }
 
@@ -196,6 +226,7 @@ class MainActivity : AppCompatActivity() {
             putString("dns", etDns.text.toString())
             putString("ns", etNs.text.toString())
             putString("pubkey", etPubkey.text.toString())
+            putString("sessions", etSessions.text.toString())
             putString("sshHostPort", etSshHostPort.text.toString())
             putString("user", etSshUser.text.toString())
             putString("pass", etSshPass.text.toString())
@@ -210,6 +241,7 @@ class MainActivity : AppCompatActivity() {
         etDns.setText(prefs.getString("dns", "1.1.1.1"))
         etNs.setText(prefs.getString("ns", ""))
         etPubkey.setText(prefs.getString("pubkey", ""))
+        etSessions.setText(prefs.getString("sessions", "2"))
         etSshHostPort.setText(prefs.getString("sshHostPort", "127.0.0.1:22"))
         etSshUser.setText(prefs.getString("user", ""))
         etSshPass.setText(prefs.getString("pass", ""))

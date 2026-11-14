@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,19 +25,220 @@ type closeWriter interface {
 	CloseWrite() error
 }
 
-type idleTimeoutConn struct {
+type tunnelSession struct {
+	id        int
+	dnsttCmd  *exec.Cmd
+	sshClient *ssh.Client
+}
+
+func (s *tunnelSession) close() {
+	if s == nil {
+		return
+	}
+	if s.sshClient != nil {
+		_ = s.sshClient.Close()
+	}
+	if s.dnsttCmd != nil && s.dnsttCmd.Process != nil {
+		_ = s.dnsttCmd.Process.Kill()
+	}
+}
+
+type tunnelManager struct {
+	dnsttBin string
+	dns      string
+	dnsType  string
+	ns       string
+	pubkey   string
+	sshAddr  string
+	user     string
+	pass     string
+	sessions int
+
+	mu            sync.RWMutex
+	list          []*tunnelSession
+	rr            atomic.Uint32
+	refreshing    atomic.Bool
+	activeStreams atomic.Int32
+	lastTrafficNs atomic.Int64
+}
+
+func (m *tunnelManager) noteTraffic() {
+	m.lastTrafficNs.Store(time.Now().UnixNano())
+}
+
+func (m *tunnelManager) isBusy() bool {
+	if m.activeStreams.Load() <= 0 {
+		return false
+	}
+	last := m.lastTrafficNs.Load()
+	return last > 0 && time.Since(time.Unix(0, last)) < 4*time.Second
+}
+
+func (m *tunnelManager) getClient() *ssh.Client {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.list) == 0 {
+		return nil
+	}
+	idx := int(m.rr.Add(1)-1) % len(m.list)
+	return m.list[idx].sshClient
+}
+
+func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
+	targetDialAddr := m.sshAddr
+	var dnsttCmd *exec.Cmd
+
+	if strings.HasPrefix(m.sshAddr, "127.0.0.1:") || strings.HasPrefix(m.sshAddr, "localhost:") {
+		freeAddr, err := getFreeLocalAddr()
+		if err != nil {
+			return nil, fmt.Errorf("gagal mencari port lokal: %v", err)
+		}
+		targetDialAddr = freeAddr
+
+		resolverVal := strings.TrimSpace(m.dns)
+		resolverFlag := "-udp"
+		switch {
+		case strings.HasPrefix(resolverVal, "https://"):
+			resolverFlag = "-doh"
+		case strings.HasPrefix(resolverVal, "tls://"), strings.HasPrefix(resolverVal, "dot://"):
+			resolverFlag = "-dot"
+			resolverVal = strings.TrimPrefix(strings.TrimPrefix(resolverVal, "tls://"), "dot://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":853"
+			}
+		case strings.HasPrefix(resolverVal, "tcp://"):
+			resolverFlag = "-tcp"
+			resolverVal = strings.TrimPrefix(resolverVal, "tcp://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":53"
+			}
+		default:
+			resolverVal = strings.TrimPrefix(resolverVal, "udp://")
+			if !strings.Contains(resolverVal, ":") {
+				resolverVal += ":53"
+			}
+		}
+
+		log.Printf("[Sesi #%d] Memulai SlowDNS (%s, type=%s) ke %s...", id, resolverVal, m.dnsType, m.ns)
+		dnsttCmd = exec.Command(m.dnsttBin, resolverFlag, resolverVal, "-type", m.dnsType, "-pubkey", m.pubkey, m.ns, freeAddr)
+		dnsttCmd.Stdout = os.Stdout
+		dnsttCmd.Stderr = os.Stderr
+		if err := dnsttCmd.Start(); err != nil {
+			return nil, fmt.Errorf("gagal memulai SlowDNS: %v", err)
+		}
+		time.Sleep(1400 * time.Millisecond)
+	}
+
+	log.Printf("[Sesi #%d] Menghubungkan SSH ke %s sebagai %s...", id, targetDialAddr, m.user)
+	config := &ssh.ClientConfig{
+		User: m.user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(m.pass),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         35 * time.Second,
+	}
+
+	sshClient, err := ssh.Dial("tcp", targetDialAddr, config)
+	if err != nil {
+		if dnsttCmd != nil && dnsttCmd.Process != nil {
+			_ = dnsttCmd.Process.Kill()
+		}
+		return nil, fmt.Errorf("gagal terhubung SSH: %v", err)
+	}
+
+	return &tunnelSession{
+		id:        id,
+		dnsttCmd:  dnsttCmd,
+		sshClient: sshClient,
+	}, nil
+}
+
+func (m *tunnelManager) dialAllSessions() ([]*tunnelSession, error) {
+	count := m.sessions
+	if count < 1 {
+		count = 1
+	}
+	if count > 4 {
+		count = 4
+	}
+
+	var active []*tunnelSession
+	for i := 1; i <= count; i++ {
+		sess, err := m.dialSingleSession(i)
+		if err != nil {
+			if len(active) > 0 {
+				log.Printf("[Sesi #%d] Dilewati (%v), berjalan dengan %d sesi aktif.", i, err, len(active))
+				break
+			}
+			return nil, err
+		}
+		active = append(active, sess)
+	}
+	return active, nil
+}
+
+func (m *tunnelManager) refresh(reason string) {
+	if !m.refreshing.CompareAndSwap(false, true) {
+		return
+	}
+	defer m.refreshing.Store(false)
+
+	log.Printf("[Refresh] %s", reason)
+	newList, err := m.dialAllSessions()
+	if err != nil {
+		log.Printf("[Refresh] Gagal menyegarkan sesi: %v", err)
+		return
+	}
+
+	m.mu.Lock()
+	oldList := m.list
+	m.list = newList
+	m.mu.Unlock()
+
+	log.Printf("[Refresh] %d jalur SlowDNS + SSH baru aktif!", len(newList))
+	if len(oldList) > 0 {
+		go func(items []*tunnelSession) {
+			time.Sleep(2 * time.Second)
+			for _, s := range items {
+				s.close()
+			}
+		}(oldList)
+	}
+}
+
+func (m *tunnelManager) closeAll() {
+	m.mu.Lock()
+	items := m.list
+	m.list = nil
+	m.mu.Unlock()
+	for _, s := range items {
+		s.close()
+	}
+}
+
+type trackedConn struct {
 	net.Conn
 	timeout time.Duration
+	onIO    func()
 }
 
-func (c *idleTimeoutConn) Read(b []byte) (int, error) {
+func (c *trackedConn) Read(b []byte) (int, error) {
 	_ = c.Conn.SetDeadline(time.Now().Add(c.timeout))
-	return c.Conn.Read(b)
+	n, err := c.Conn.Read(b)
+	if n > 0 && c.onIO != nil {
+		c.onIO()
+	}
+	return n, err
 }
 
-func (c *idleTimeoutConn) Write(b []byte) (int, error) {
+func (c *trackedConn) Write(b []byte) (int, error) {
 	_ = c.Conn.SetDeadline(time.Now().Add(c.timeout))
-	return c.Conn.Write(b)
+	n, err := c.Conn.Write(b)
+	if n > 0 && c.onIO != nil {
+		c.onIO()
+	}
+	return n, err
 }
 
 type dnsCacheEntry struct {
@@ -99,7 +302,7 @@ func getFreeLocalAddr() (string, error) {
 	return addr, nil
 }
 
-func listenTunSocket(sockName string) (*net.UnixListener, error) {
+func listenAbstractUnix(sockName string) (*net.UnixListener, error) {
 	addr, err := net.ResolveUnixAddr("unix", "\x00"+sockName)
 	if err != nil {
 		return nil, err
@@ -210,6 +413,9 @@ func parseSocksUDPPacket(pkt []byte) (host string, port int, header []byte, payl
 }
 
 func dialSSHWithTimeout(sshClient *ssh.Client, network, addr string, timeout time.Duration) (net.Conn, error) {
+	if sshClient == nil {
+		return nil, fmt.Errorf("ssh client nil")
+	}
 	type dialRes struct {
 		conn net.Conn
 		err  error
@@ -235,12 +441,12 @@ func dialSSHWithTimeout(sshClient *ssh.Client, network, addr string, timeout tim
 }
 
 func queryDNSOnce(sshClient *ssh.Client, serverIP string, query []byte) ([]byte, error) {
-	conn, err := dialSSHWithTimeout(sshClient, "tcp", net.JoinHostPort(serverIP, "53"), 8*time.Second)
+	conn, err := dialSSHWithTimeout(sshClient, "tcp", net.JoinHostPort(serverIP, "53"), 7*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(7 * time.Second))
 
 	req := make([]byte, 2+len(query))
 	binary.BigEndian.PutUint16(req[:2], uint16(len(query)))
@@ -265,37 +471,43 @@ func queryDNSOnce(sshClient *ssh.Client, serverIP string, query []byte) ([]byte,
 	return resp, nil
 }
 
-func resolveDNS(sshClient *ssh.Client, cache *dnsCache, dstHost string, query []byte) ([]byte, error) {
+func resolveDNS(mgr *tunnelManager, cache *dnsCache, dstHost string, query []byte) ([]byte, error) {
 	if cached, ok := cache.get(query); ok {
 		return cached, nil
 	}
 
+	sshClient := mgr.getClient()
 	resp, err := queryDNSOnce(sshClient, dstHost, query)
 	if err != nil {
 		fallback := "1.1.1.1"
 		if dstHost == "1.1.1.1" {
 			fallback = "8.8.8.8"
 		}
-		resp, err = queryDNSOnce(sshClient, fallback, query)
+		resp, err = queryDNSOnce(mgr.getClient(), fallback, query)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	cache.set(query, resp, 120*time.Second)
+	mgr.noteTraffic()
+	cache.set(query, resp, 180*time.Second)
 	return resp, nil
 }
 
-func relayBidirectional(localConn, remoteConn net.Conn) {
-	c1 := &idleTimeoutConn{Conn: localConn, timeout: 90 * time.Second}
-	c2 := &idleTimeoutConn{Conn: remoteConn, timeout: 90 * time.Second}
+func relayBidirectional(localConn, remoteConn net.Conn, mgr *tunnelManager) {
+	mgr.activeStreams.Add(1)
+	defer mgr.activeStreams.Add(-1)
+
+	c1 := &trackedConn{Conn: localConn, timeout: 90 * time.Second, onIO: mgr.noteTraffic}
+	c2 := &trackedConn{Conn: remoteConn, timeout: 90 * time.Second, onIO: mgr.noteTraffic}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(c2, c1)
+		buf := make([]byte, 16384)
+		_, _ = io.CopyBuffer(c2, c1, buf)
 		if cw, ok := remoteConn.(closeWriter); ok {
 			_ = cw.CloseWrite()
 		}
@@ -303,7 +515,8 @@ func relayBidirectional(localConn, remoteConn net.Conn) {
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(c1, c2)
+		buf := make([]byte, 16384)
+		_, _ = io.CopyBuffer(c1, c2, buf)
 		if cw, ok := localConn.(closeWriter); ok {
 			_ = cw.CloseWrite()
 		}
@@ -312,10 +525,12 @@ func relayBidirectional(localConn, remoteConn net.Conn) {
 	wg.Wait()
 }
 
-func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client, cache *dnsCache, dialSem chan struct{}) {
+func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, dialSem chan struct{}) {
 	defer clientConn.Close()
 	if tcpConn, ok := clientConn.(*net.TCPConn); ok {
 		_ = tcpConn.SetNoDelay(true)
+		_ = tcpConn.SetReadBuffer(32768)
+		_ = tcpConn.SetWriteBuffer(32768)
 	}
 
 	hdr := make([]byte, 2)
@@ -348,7 +563,7 @@ func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client, cache *dnsCache
 		}
 
 		target := net.JoinHostPort(host, strconv.Itoa(port))
-		remoteConn, err := dialSSHWithTimeout(sshClient, "tcp", target, 15*time.Second)
+		remoteConn, err := dialSSHWithTimeout(mgr.getClient(), "tcp", target, 12*time.Second)
 		<-dialSem
 		if err != nil {
 			_, _ = clientConn.Write([]byte{0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -359,7 +574,7 @@ func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client, cache *dnsCache
 		if _, err := clientConn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
 			return
 		}
-		relayBidirectional(clientConn, remoteConn)
+		relayBidirectional(clientConn, remoteConn, mgr)
 
 	case 0x03: // UDP ASSOCIATE (Cached DNS-over-TCP relay)
 		udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
@@ -395,7 +610,7 @@ func handleSocksConn(clientConn net.Conn, sshClient *ssh.Client, cache *dnsCache
 				}
 
 				go func(addr *net.UDPAddr, h string, sh []byte, q []byte) {
-					dnsResp, err := resolveDNS(sshClient, cache, h, q)
+					dnsResp, err := resolveDNS(mgr, cache, h, q)
 					if err != nil {
 						return
 					}
@@ -418,6 +633,7 @@ func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")
 	tunBin := flag.String("tunbin", "", "Path to libtun2socks.so")
 	tunSock := flag.String("tunsock", "", "Abstract unix socket name to receive TUN fd")
+	ctrlSock := flag.String("ctrlsock", "", "Abstract unix socket name for control commands")
 	dns := flag.String("dns", "1.1.1.1", "DNS resolver")
 	dnsType := flag.String("type", "NULL", "DNS record type (NULL, AUTO, TXT)")
 	ns := flag.String("ns", "", "SlowDNS Nameserver")
@@ -425,97 +641,95 @@ func main() {
 	sshAddr := flag.String("ssh", "127.0.0.1:22", "SSH Host:Port")
 	user := flag.String("user", "", "SSH Username")
 	pass := flag.String("pass", "", "SSH Password")
+	sessions := flag.Int("sessions", 2, "Number of parallel SlowDNS+SSH sessions")
 	socksAddr := flag.String("socks", "127.0.0.1:1080", "Local SOCKS5 listen address")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
 	log.SetFlags(0)
 
-	targetDialAddr := *sshAddr
-	var procMu sync.Mutex
-	var dnsttCmd *exec.Cmd
-	var tunCmd *exec.Cmd
-
-	if strings.HasPrefix(*sshAddr, "127.0.0.1:") || strings.HasPrefix(*sshAddr, "localhost:") {
-		freeAddr, err := getFreeLocalAddr()
-		if err != nil {
-			log.Fatalf("[SlowDNS] Gagal mencari port lokal bebas: %v", err)
-		}
-		targetDialAddr = freeAddr
-
-		resolverVal := strings.TrimSpace(*dns)
-		resolverFlag := "-udp"
-		switch {
-		case strings.HasPrefix(resolverVal, "https://"):
-			resolverFlag = "-doh"
-		case strings.HasPrefix(resolverVal, "tls://"), strings.HasPrefix(resolverVal, "dot://"):
-			resolverFlag = "-dot"
-			resolverVal = strings.TrimPrefix(strings.TrimPrefix(resolverVal, "tls://"), "dot://")
-			if !strings.Contains(resolverVal, ":") {
-				resolverVal += ":853"
-			}
-		case strings.HasPrefix(resolverVal, "tcp://"):
-			resolverFlag = "-tcp"
-			resolverVal = strings.TrimPrefix(resolverVal, "tcp://")
-			if !strings.Contains(resolverVal, ":") {
-				resolverVal += ":53"
-			}
-		default:
-			resolverVal = strings.TrimPrefix(resolverVal, "udp://")
-			if !strings.Contains(resolverVal, ":") {
-				resolverVal += ":53"
-			}
-		}
-
-		log.Printf("[SlowDNS] Memulai transport (%s, type=%s) ke %s...", resolverVal, *dnsType, *ns)
-		dnsttCmd = exec.Command(*dnsttBin, resolverFlag, resolverVal, "-type", *dnsType, "-pubkey", *pubkey, *ns, freeAddr)
-		dnsttCmd.Stdout = os.Stdout
-		dnsttCmd.Stderr = os.Stderr
-		if err := dnsttCmd.Start(); err != nil {
-			log.Fatalf("[SlowDNS] Gagal memulai: %v", err)
-		}
-		defer dnsttCmd.Process.Kill()
-		time.Sleep(1500 * time.Millisecond)
+	mgr := &tunnelManager{
+		dnsttBin: *dnsttBin,
+		dns:      *dns,
+		dnsType:  *dnsType,
+		ns:       *ns,
+		pubkey:   *pubkey,
+		sshAddr:  *sshAddr,
+		user:     *user,
+		pass:     *pass,
+		sessions: *sessions,
 	}
 
-	log.Printf("[SSH] Menghubungkan ke %s sebagai %s...", targetDialAddr, *user)
-	config := &ssh.ClientConfig{
-		User: *user,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(*pass),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         45 * time.Second,
-	}
-
-	sshClient, err := ssh.Dial("tcp", targetDialAddr, config)
+	activeList, err := mgr.dialAllSessions()
 	if err != nil {
-		log.Fatalf("[SSH] Gagal terhubung: %v", err)
+		log.Fatalf("[Core] %v", err)
 	}
-	defer sshClient.Close()
-	log.Println("[SSH] Tersambung! Membuka SOCKS5 + Cached DNS...")
+	mgr.mu.Lock()
+	mgr.list = activeList
+	mgr.mu.Unlock()
+	log.Printf("[SSH] Tersambung (%d sesi aktif)! Membuka SOCKS5 + Anti-Bufferbloat...", len(activeList))
 
-	// Keepalive toleran: hanya putus jika 3x berturut-turut gagal
-	go func() {
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		missed := 0
-		for range ticker.C {
-			_, _, err := sshClient.SendRequest("keepalive@openssh.com", true, nil)
-			if err != nil {
-				missed++
-				if missed >= 3 {
-					log.Printf("[SSH] Koneksi terputus setelah 3x retry: %v", err)
-					os.Exit(1)
+	if *ctrlSock != "" {
+		ctrlListener, err := listenAbstractUnix(*ctrlSock)
+		if err == nil {
+			go func() {
+				defer ctrlListener.Close()
+				for {
+					conn, err := ctrlListener.AcceptUnix()
+					if err != nil {
+						return
+					}
+					go func(c *net.UnixConn) {
+						defer c.Close()
+						line, _ := bufio.NewReader(c).ReadString('\n')
+						if strings.TrimSpace(line) == "REFRESH" {
+							mgr.refresh("Menyegarkan port UDP SlowDNS & sesi SSH...")
+						}
+					}(conn)
 				}
-			} else {
-				missed = 0
+			}()
+		}
+	}
+
+	go func() {
+		ticker := time.NewTicker(12 * time.Second)
+		defer ticker.Stop()
+		stalledCount := 0
+		for range ticker.C {
+			if mgr.isBusy() || mgr.refreshing.Load() {
+				stalledCount = 0
+				continue
+			}
+			client := mgr.getClient()
+			if client == nil {
+				continue
+			}
+			done := make(chan error, 1)
+			go func(c *ssh.Client) {
+				_, _, err := c.SendRequest("keepalive@openssh.com", true, nil)
+				done <- err
+			}(client)
+
+			select {
+			case err := <-done:
+				if err != nil {
+					stalledCount++
+				} else {
+					stalledCount = 0
+				}
+			case <-time.After(6 * time.Second):
+				stalledCount++
+			}
+
+			if stalledCount >= 2 {
+				stalledCount = 0
+				mgr.refresh("Auto-Heal: jalur SlowDNS melambat, menyegarkan sesi...")
 			}
 		}
 	}()
 
 	cache := newDNSCache()
-	dialSem := make(chan struct{}, 24)
+	dialSem := make(chan struct{}, 20)
 
 	socksListener, err := net.Listen("tcp", *socksAddr)
 	if err != nil {
@@ -527,18 +741,20 @@ func main() {
 			if err != nil {
 				return
 			}
-			go handleSocksConn(conn, sshClient, cache, dialSem)
+			go handleSocksConn(conn, mgr, cache, dialSem)
 		}
 	}()
 
 	var tunListener *net.UnixListener
 	if *tunSock != "" && *tunBin != "" {
-		tunListener, err = listenTunSocket(*tunSock)
+		tunListener, err = listenAbstractUnix(*tunSock)
 		if err != nil {
 			log.Fatalf("[TUN] Gagal membuka socket SCM_RIGHTS: %v", err)
 		}
 	}
 
+	var procMu sync.Mutex
+	var tunCmd *exec.Cmd
 	if tunListener != nil {
 		go func() {
 			tunFd, err := acceptTunFd(tunListener)
@@ -576,8 +792,6 @@ func main() {
 	if tunCmd != nil && tunCmd.Process != nil {
 		_ = tunCmd.Process.Kill()
 	}
-	if dnsttCmd != nil && dnsttCmd.Process != nil {
-		_ = dnsttCmd.Process.Kill()
-	}
 	procMu.Unlock()
+	mgr.closeAll()
 }
