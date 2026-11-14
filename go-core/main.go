@@ -9,10 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/armon/go-socks5"
-	"github.com/xjasonlyu/tun2socks/v2/engine"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -26,8 +26,44 @@ func getFreeLocalAddr() (string, error) {
 	return addr, nil
 }
 
+func receiveTunFd(sockName string) (int, error) {
+	addr, err := net.ResolveUnixAddr("unix", "\x00"+sockName)
+	if err != nil {
+		return -1, err
+	}
+	listener, err := net.ListenUnix("unix", addr)
+	if err != nil {
+		return -1, err
+	}
+	defer listener.Close()
+
+	conn, err := listener.AcceptUnix()
+	if err != nil {
+		return -1, err
+	}
+	defer conn.Close()
+
+	buf := make([]byte, 16)
+	oob := make([]byte, syscall.CmsgSpace(4))
+	_, oobn, _, _, err := conn.ReadMsgUnix(buf, oob)
+	if err != nil {
+		return -1, err
+	}
+	cmsgs, err := syscall.ParseSocketControlMessage(oob[:oobn])
+	if err != nil || len(cmsgs) == 0 {
+		return -1, fmt.Errorf("no control message received")
+	}
+	fds, err := syscall.ParseUnixRights(&cmsgs[0])
+	if err != nil || len(fds) == 0 {
+		return -1, fmt.Errorf("no fd in SCM_RIGHTS")
+	}
+	return fds[0], nil
+}
+
 func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")
+	tunBin := flag.String("tunbin", "", "Path to libtun2socks.so")
+	tunSock := flag.String("tunsock", "", "Abstract unix socket name to receive TUN fd")
 	dns := flag.String("dns", "1.1.1.1", "DNS resolver")
 	dnsType := flag.String("type", "NULL", "DNS record type (NULL, AUTO, TXT)")
 	ns := flag.String("ns", "", "SlowDNS Nameserver")
@@ -36,7 +72,6 @@ func main() {
 	user := flag.String("user", "", "SSH Username")
 	pass := flag.String("pass", "", "SSH Password")
 	socksAddr := flag.String("socks", "127.0.0.1:1080", "Local SOCKS5 listen address")
-	withTun := flag.Bool("tun", false, "Attach tun2socks to stdin (fd://0)")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -117,7 +152,7 @@ func main() {
 		}
 	}()
 
-	// 3. Jalankan SOCKS5 Server di background
+	// 3. Jalankan SOCKS5 Server
 	conf := &socks5.Config{
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return sshClient.Dial(network, addr)
@@ -133,22 +168,33 @@ func main() {
 			log.Fatalf("[SOCKS5] Error: %v", err)
 		}
 	}()
-	time.Sleep(200 * time.Millisecond)
 
-	// 4. Jalankan tun2socks langsung pada fd://0 (stdin yang diwarisi dari TUN interface)
-	if *withTun {
-		key := &engine.Key{
-			MTU:      1500,
-			Proxy:    "socks5://" + *socksAddr,
-			Device:   "fd://0",
-			LogLevel: "warn",
-		}
-		engine.Insert(key)
-		engine.Start()
-		defer engine.Stop()
-		log.Println("[TUN] Engine tun2socks aktif pada fd://0")
+	// 4. Terima TUN FD lewat SCM_RIGHTS lalu jalankan libtun2socks.so dengan ExtraFiles (FD 3)
+	if *tunSock != "" && *tunBin != "" {
+		go func() {
+			tunFd, err := receiveTunFd(*tunSock)
+			if err != nil {
+				log.Printf("[TUN] Gagal menerima FD: %v", err)
+				return
+			}
+			tunFile := os.NewFile(uintptr(tunFd), "tun0")
+			defer tunFile.Close()
+
+			// ExtraFiles[0] selalu menjadi FD 3 di proses child
+			tunCmd := exec.Command(*tunBin, "--device", "fd://3", "--proxy", "socks5://"+*socksAddr, "--mtu", "1500", "--loglevel", "warn")
+			tunCmd.ExtraFiles = []*os.File{tunFile}
+			tunCmd.Stdout = os.Stdout
+			tunCmd.Stderr = os.Stderr
+			if err := tunCmd.Start(); err != nil {
+				log.Printf("[TUN] Gagal menjalankan tun2socks: %v", err)
+				return
+			}
+			log.Println("[TUN] Engine tun2socks aktif (FD 3 O_RDWR)")
+			tunCmd.Wait()
+		}()
 	}
 
+	time.Sleep(200 * time.Millisecond)
 	fmt.Println("READY_CONNECTED")
 	select {}
 }

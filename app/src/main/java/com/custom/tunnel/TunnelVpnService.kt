@@ -3,13 +3,14 @@ package com.custom.tunnel
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.net.LocalSocket
+import android.net.LocalSocketAddress
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.BufferedReader
-import java.io.File
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -58,26 +59,16 @@ class TunnelVpnService : VpnService() {
         try {
             val nativeDir = applicationInfo.nativeLibraryDir
             val localSocksPort = 1080
+            val tunSockName = "custom_tunnel_fd_${System.currentTimeMillis()}"
             val connectedDeferred = CompletableDeferred<Boolean>()
 
-            // 1. Buat Antarmuka Virtual VPN (tun0) lebih dulu
-            val builder = Builder()
-                .setSession("Custom Tunnel VPN")
-                .setMtu(1500)
-                .addAddress("10.0.0.2", 24)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
-                .addDisallowedApplication(packageName)
-
-            vpnInterface = builder.establish()
-            val tunFd = vpnInterface?.fd ?: throw IllegalStateException("Gagal membuat TUN interface")
-
-            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS + TUN Core...", "#64B5F6")
+            TunnelLogger.log("[ss] Memulai Go SSH + SlowDNS Core...", "#64B5F6")
 
             val coreCmd = arrayOf(
                 "$nativeDir/libsshcore.so",
                 "-dnstt", "$nativeDir/libdnstt.so",
+                "-tunbin", "$nativeDir/libtun2socks.so",
+                "-tunsock", tunSockName,
                 "-dns", dns,
                 "-type", dnsType,
                 "-ns", ns,
@@ -85,15 +76,9 @@ class TunnelVpnService : VpnService() {
                 "-ssh", sshHostPort,
                 "-user", user,
                 "-pass", pass,
-                "-socks", "127.0.0.1:$localSocksPort",
-                "-tun"
+                "-socks", "127.0.0.1:$localSocksPort"
             )
-
-            // Arahkan /proc/self/fd/$tunFd menjadi stdin (fd://0) bagi proses libsshcore.so
-            coreProcess = ProcessBuilder(*coreCmd)
-                .redirectInput(File("/proc/self/fd/$tunFd"))
-                .redirectErrorStream(true)
-                .start()
+            coreProcess = ProcessBuilder(*coreCmd).redirectErrorStream(true).start()
 
             serviceScope.launch {
                 try {
@@ -119,6 +104,28 @@ class TunnelVpnService : VpnService() {
             val isConnected = withTimeoutOrNull(50000) { connectedDeferred.await() } ?: false
             if (!isConnected) {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
+            }
+
+            // Buat Antarmuka Virtual VPN (tun0)
+            val builder = Builder()
+                .setSession("Custom Tunnel VPN")
+                .setMtu(1500)
+                .addAddress("10.0.0.2", 24)
+                .addRoute("0.0.0.0", 0)
+                .addDnsServer("8.8.8.8")
+                .addDnsServer("1.1.1.1")
+                .addDisallowedApplication(packageName)
+
+            vpnInterface = builder.establish()
+            val pfd = vpnInterface ?: throw IllegalStateException("Gagal membuat TUN interface")
+
+            // Kirim FileDescriptor TUN asli (O_RDWR) ke Go core lewat Unix Domain Socket SCM_RIGHTS
+            delay(150)
+            LocalSocket().use { clientSocket ->
+                clientSocket.connect(LocalSocketAddress(tunSockName, LocalSocketAddress.Namespace.ABSTRACT))
+                clientSocket.setFileDescriptorsForSend(arrayOf(pfd.fileDescriptor))
+                clientSocket.outputStream.write(byteArrayOf(1))
+                clientSocket.outputStream.flush()
             }
 
             TunnelLogger.rawHtml("<b><font color='#00E676'>🇮🇩 MANTAP BERHASIL CONECT VPN NYA 🇮🇩</font></b>")
