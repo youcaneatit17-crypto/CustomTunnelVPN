@@ -44,7 +44,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCleanLog: Button
     private lateinit var tvLogs: TextView
     private lateinit var tvHeaderStatus: TextView
-    private lateinit var tvTunnelStatus: TextView
     private lateinit var tvStatDown: TextView
     private lateinit var tvStatDownPeak: TextView
     private lateinit var tvStatUp: TextView
@@ -110,7 +109,6 @@ class MainActivity : AppCompatActivity() {
         btnCleanLog = findViewById(R.id.btnCleanLog)
         tvLogs = findViewById(R.id.tvLogs)
         tvHeaderStatus = findViewById(R.id.tvHeaderStatus)
-        tvTunnelStatus = findViewById(R.id.tvTunnelStatus)
         tvStatDown = findViewById(R.id.tvStatDown)
         tvStatDownPeak = findViewById(R.id.tvStatDownPeak)
         tvStatUp = findViewById(R.id.tvStatUp)
@@ -494,8 +492,6 @@ class MainActivity : AppCompatActivity() {
             tvHeaderStatus.text = "CONNECTED"
             tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
             tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
-            tvTunnelStatus.text = "Terhubung (Terlindungi)"
-            tvTunnelStatus.setTextColor(Color.parseColor("#4ADE80"))
             tvStatusDotLabel.text = "● Terhubung"
             tvStatusDotLabel.setTextColor(Color.parseColor("#4ADE80"))
             
@@ -510,8 +506,6 @@ class MainActivity : AppCompatActivity() {
             tvHeaderStatus.text = "OFFLINE"
             tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
             tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
-            tvTunnelStatus.text = "Terputus (Siap)"
-            tvTunnelStatus.setTextColor(Color.parseColor("#E5E7EB"))
             tvStatusDotLabel.text = "● Tidak aktif"
             tvStatusDotLabel.setTextColor(Color.parseColor("#9CA3AF"))
             
