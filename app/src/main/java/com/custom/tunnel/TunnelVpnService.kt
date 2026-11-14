@@ -351,6 +351,10 @@ class TunnelVpnService : VpnService() {
         } catch (_: Exception) {}
         coreProcess = null
 
+    }
+
+    private fun cleanupAllResources() {
+        cleanupCoreProcessOnly()
         try { vpnInterface?.close() } catch (_: Exception) {}
         vpnInterface = null
     }
