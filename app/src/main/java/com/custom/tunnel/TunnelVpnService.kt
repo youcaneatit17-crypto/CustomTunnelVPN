@@ -92,7 +92,7 @@ class TunnelVpnService : VpnService() {
             }
             sshConnection = conn
 
-            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080 di atas SSH Stream
+            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080 via Trilead LocalPortForwarder
             startLocalSocks5Server(conn, localSocksPort)
 
             // 3. Buat Antarmuka Virtual VPN (tun0)
@@ -148,6 +148,8 @@ class TunnelVpnService : VpnService() {
     }
 
     private suspend fun handleSocks5Client(client: Socket, conn: Connection) = withContext(Dispatchers.IO) {
+        var lpf: com.trilead.ssh2.LocalPortForwarder? = null
+        var forwardSocket: Socket? = null
         try {
             val input = DataInputStream(client.getInputStream())
             val output = client.getOutputStream()
@@ -158,7 +160,7 @@ class TunnelVpnService : VpnService() {
             val nMethods = input.readUnsignedByte()
             val methods = ByteArray(nMethods)
             input.readFully(methods)
-            output.write(byteArrayOf(0x05, 0x00)) // No authentication
+            output.write(byteArrayOf(0x05, 0x00))
             output.flush()
 
             // SOCKS5 Request
@@ -168,18 +170,18 @@ class TunnelVpnService : VpnService() {
             val atyp = input.readByte().toInt()
 
             val destHost: String = when (atyp) {
-                1 -> { // IPv4
+                1 -> {
                     val addr = ByteArray(4)
                     input.readFully(addr)
                     InetAddress.getByAddress(addr).hostAddress ?: ""
                 }
-                3 -> { // Domain
+                3 -> {
                     val len = input.readUnsignedByte()
                     val domain = ByteArray(len)
                     input.readFully(domain)
                     String(domain)
                 }
-                4 -> { // IPv6
+                4 -> {
                     val addr = ByteArray(16)
                     input.readFully(addr)
                     InetAddress.getByAddress(addr).hostAddress ?: ""
@@ -188,27 +190,34 @@ class TunnelVpnService : VpnService() {
             }
             val destPort = input.readUnsignedShort()
 
-            if (cmd != 1) { // Only TCP CONNECT
+            if (cmd != 1) {
                 output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
                 client.close()
                 return@withContext
             }
 
-            // Buka SSH Direct-TCPIP Stream
-            val stream = conn.openStream(destHost, destPort)
+            // Buat LocalPortForwarder pada port lokal acak (0) menuju destHost:destPort
+            lpf = conn.createLocalPortForwarder(InetSocketAddress("127.0.0.1", 0), destHost, destPort)
+            forwardSocket = Socket()
+            forwardSocket.connect(lpf.localSocketAddress, 10000)
+
             output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
 
+            val fwdIn = forwardSocket.getInputStream()
+            val fwdOut = forwardSocket.getOutputStream()
+
             val job1 = launch {
-                try { input.copyTo(stream.stdin) } catch (_: Exception) {}
+                try { input.copyTo(fwdOut) } catch (_: Exception) {}
             }
             val job2 = launch {
-                try { stream.stdout.copyTo(output) } catch (_: Exception) {}
+                try { fwdIn.copyTo(output) } catch (_: Exception) {}
             }
             joinAll(job1, job2)
-            stream.close()
-            client.close()
         } catch (_: Exception) {
+        } finally {
+            try { forwardSocket?.close() } catch (_: Exception) {}
+            try { lpf?.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
         }
     }
