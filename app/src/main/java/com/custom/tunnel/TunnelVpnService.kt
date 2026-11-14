@@ -8,11 +8,13 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.trilead.ssh2.Connection
-import com.trilead.ssh2.DynamicPortForwarder
 import kotlinx.coroutines.*
 import java.io.BufferedReader
+import java.io.DataInputStream
 import java.io.InputStreamReader
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 
 class TunnelVpnService : VpnService() {
@@ -22,7 +24,7 @@ class TunnelVpnService : VpnService() {
     private var slowDnsProcess: Process? = null
     private var tun2SocksProcess: Process? = null
     private var sshConnection: Connection? = null
-    private var dynamicForwarder: DynamicPortForwarder? = null
+    private var socksServerSocket: ServerSocket? = null
 
     companion object {
         var isRunning = false
@@ -89,7 +91,9 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Autentikasi SSH gagal (Username/Password salah)")
             }
             sshConnection = conn
-            dynamicForwarder = conn.createDynamicPortForwarder(localSocksPort)
+
+            // Jalankan Local SOCKS5 Proxy di 127.0.0.1:1080 di atas SSH Stream
+            startLocalSocks5Server(conn, localSocksPort)
 
             // 3. Buat Antarmuka Virtual VPN (tun0)
             val builder = Builder()
@@ -131,6 +135,84 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    private fun startLocalSocks5Server(conn: Connection, port: Int) {
+        socksServerSocket = ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))
+        serviceScope.launch {
+            while (isRunning && socksServerSocket?.isClosed == false) {
+                try {
+                    val client = socksServerSocket!!.accept()
+                    launch { handleSocks5Client(client, conn) }
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    private suspend fun handleSocks5Client(client: Socket, conn: Connection) = withContext(Dispatchers.IO) {
+        try {
+            val input = DataInputStream(client.getInputStream())
+            val output = client.getOutputStream()
+
+            // SOCKS5 Handshake
+            val ver = input.readByte().toInt()
+            if (ver != 5) { client.close(); return@withContext }
+            val nMethods = input.readUnsignedByte()
+            val methods = ByteArray(nMethods)
+            input.readFully(methods)
+            output.write(byteArrayOf(0x05, 0x00)) // No authentication
+            output.flush()
+
+            // SOCKS5 Request
+            input.readByte() // ver
+            val cmd = input.readByte().toInt()
+            input.readByte() // rsv
+            val atyp = input.readByte().toInt()
+
+            val destHost: String = when (atyp) {
+                1 -> { // IPv4
+                    val addr = ByteArray(4)
+                    input.readFully(addr)
+                    InetAddress.getByAddress(addr).hostAddress ?: ""
+                }
+                3 -> { // Domain
+                    val len = input.readUnsignedByte()
+                    val domain = ByteArray(len)
+                    input.readFully(domain)
+                    String(domain)
+                }
+                4 -> { // IPv6
+                    val addr = ByteArray(16)
+                    input.readFully(addr)
+                    InetAddress.getByAddress(addr).hostAddress ?: ""
+                }
+                else -> { client.close(); return@withContext }
+            }
+            val destPort = input.readUnsignedShort()
+
+            if (cmd != 1) { // Only TCP CONNECT
+                output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+                client.close()
+                return@withContext
+            }
+
+            // Buka SSH Direct-TCPIP Stream
+            val stream = conn.openStream(destHost, destPort)
+            output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+            output.flush()
+
+            val job1 = launch {
+                try { input.copyTo(stream.stdin) } catch (_: Exception) {}
+            }
+            val job2 = launch {
+                try { stream.stdout.copyTo(output) } catch (_: Exception) {}
+            }
+            joinAll(job1, job2)
+            stream.close()
+            client.close()
+        } catch (_: Exception) {
+            try { client.close() } catch (_: Exception) {}
+        }
+    }
+
     private fun monitorProcessOutput(process: Process, tag: String) {
         serviceScope.launch {
             try {
@@ -164,7 +246,7 @@ class TunnelVpnService : VpnService() {
 
     private fun stopTunnel() {
         isRunning = false
-        try { dynamicForwarder?.close() } catch (_: Exception) {}
+        try { socksServerSocket?.close() } catch (_: Exception) {}
         try { sshConnection?.close() } catch (_: Exception) {}
         try { tun2SocksProcess?.destroy() } catch (_: Exception) {}
         try { slowDnsProcess?.destroy() } catch (_: Exception) {}
