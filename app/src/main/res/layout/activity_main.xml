@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout 
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -12,27 +12,21 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- TOP BAR -->
+        <!-- TOP BAR BERANDA & PROFIL -->
         <LinearLayout
+            android:id="@+id/topBarMain"
             android:layout_width="match_parent"
             android:layout_height="?android:attr/actionBarSize"
             android:background="#15181E"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp">
-
-            <ImageButton
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_sort_by_size"
-                android:tint="#E2E8F0" />
+            android:paddingHorizontal="14dp">
 
             <TextView
+                android:id="@+id/tvTopTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
                 android:text="Custom Tunnel"
                 android:textColor="#FB923C"
                 android:textSize="18sp"
@@ -52,7 +46,48 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- SUB-TABS -->
+        <!-- TOP BAR PENGATURAN (VPN PER APLIKASI) -->
+        <LinearLayout
+            android:id="@+id/topBarSettings"
+            android:layout_width="match_parent"
+            android:layout_height="?android:attr/actionBarSize"
+            android:background="#15181E"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/btnBackFromSettings"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_revert"
+                app:tint="#E2E8F0" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="VPN per aplikasi"
+                android:textColor="#F3F4F6"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnClearSelectedApps"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="+"
+                android:rotation="45"
+                android:textColor="#E2E8F0"
+                android:textSize="24sp" />
+        </LinearLayout>
+
+        <!-- SUB-TABS BERANDA -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tabLayout"
             android:layout_width="match_parent"
@@ -61,8 +96,8 @@
             app:tabIndicatorColor="#3B82F6"
             app:tabIndicatorHeight="2.5dp"
             app:tabSelectedTextColor="#3B82F6"
-            app:tabTextColor="#9CA3AF"
-            app:tabTextAppearance="@android:style/TextAppearance.Small">
+            app:tabTextAppearance="@android:style/TextAppearance.Small"
+            app:tabTextColor="#9CA3AF">
 
             <com.google.android.material.tabs.TabItem
                 android:layout_width="wrap_content"
@@ -92,7 +127,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingBottom="24dp">
+                    android:paddingBottom="76dp">
 
                     <!-- TRAFFIC CARD -->
                     <LinearLayout
@@ -103,19 +138,13 @@
                         android:orientation="vertical"
                         android:padding="14dp">
 
-                        <LinearLayout
-                            android:layout_width="match_parent"
+                        <TextView
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="📊 Trafik"
-                                android:textColor="#9CA3AF"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
-                        </LinearLayout>
+                            android:text="📊 Trafik"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -128,12 +157,14 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:orientation="vertical">
+
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="↓ Unduh"
                                     android:textColor="#4ADE80"
                                     android:textSize="11sp" />
+
                                 <TextView
                                     android:id="@+id/tvStatDown"
                                     android:layout_width="wrap_content"
@@ -143,6 +174,7 @@
                                     android:textColor="#FFFFFF"
                                     android:textSize="15sp"
                                     android:textStyle="bold" />
+
                                 <TextView
                                     android:id="@+id/tvStatDownPeak"
                                     android:layout_width="wrap_content"
@@ -158,12 +190,14 @@
                                 android:layout_weight="1"
                                 android:gravity="end"
                                 android:orientation="vertical">
+
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="↑ Unggah"
                                     android:textColor="#6EA8FE"
                                     android:textSize="11sp" />
+
                                 <TextView
                                     android:id="@+id/tvStatUp"
                                     android:layout_width="wrap_content"
@@ -173,6 +207,7 @@
                                     android:textColor="#FFFFFF"
                                     android:textSize="15sp"
                                     android:textStyle="bold" />
+
                                 <TextView
                                     android:id="@+id/tvStatUpPeak"
                                     android:layout_width="wrap_content"
@@ -189,18 +224,17 @@
                             android:layout_marginTop="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
-                            
+
                             <TextView
                                 android:id="@+id/tvStatusDotLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:background="#1E293B"
+                                android:background="@drawable/bg_input"
                                 android:paddingHorizontal="10dp"
                                 android:paddingVertical="4dp"
                                 android:text="● Tidak aktif"
                                 android:textColor="#9CA3AF"
-                                android:textSize="11sp"
-                                android:backgroundTint="#242B35" />
+                                android:textSize="11sp" />
 
                             <View
                                 android:layout_width="0dp"
@@ -211,13 +245,14 @@
                                 android:id="@+id/tvLocalIp"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="🌐 IP: -"
+                                android:fontFamily="monospace"
+                                android:text="192.168.42.22"
                                 android:textColor="#9CA3AF"
                                 android:textSize="11sp" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- SEAMLESS OPERATION & KONEK -->
+                    <!-- KONEKSI UTAMA & REFRESH -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -226,39 +261,31 @@
                         android:orientation="vertical"
                         android:padding="14dp">
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:text="KONEKSI UTAMA"
-                            android:textColor="#E2E8F0"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
 
                             <TextView
+                                android:id="@+id/tvSplitSummaryHome"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Load balancing [ ✓ Profil ]"
+                                android:text="VPN per aplikasi: Semua aplikasi"
                                 android:textColor="#9CA3AF"
                                 android:textSize="12sp" />
 
                             <Button
-                                android:id="@+id/btnLihatLihat"
+                                android:id="@+id/btnLihatSplit"
                                 android:layout_width="wrap_content"
                                 android:layout_height="36dp"
                                 android:backgroundTint="#1F2937"
-                                android:text="Lihat"
+                                android:text="Atur"
                                 android:textColor="#6EA8FE"
                                 android:textSize="11sp" />
                         </LinearLayout>
-                        
+
                         <Button
                             android:id="@+id/btnRefresh"
                             android:layout_width="match_parent"
@@ -284,7 +311,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="10dp"
                             android:text="👤 SlowDNS"
                             android:textColor="#34D399"
                             android:textSize="12sp"
@@ -367,8 +394,8 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="12dp"
-                            android:text="🔑 Akun"
+                            android:layout_marginBottom="10dp"
+                            android:text="🔑 Akun SSH &amp; BadVPN"
                             android:textColor="#6EA8FE"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -480,7 +507,7 @@
                 </ScrollView>
             </LinearLayout>
 
-            <!-- PROFILE VIEW -->
+            <!-- VIEW PROFIL -->
             <ScrollView
                 android:id="@+id/layoutProfil"
                 android:layout_width="match_parent"
@@ -494,7 +521,6 @@
                     android:orientation="vertical"
                     android:paddingBottom="24dp">
 
-                    <!-- PROFIL CARD -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -558,7 +584,6 @@
                         android:layout_marginBottom="12dp"
                         android:orientation="vertical" />
 
-                    <!-- JSON IMPORT EXPORT -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -619,18 +644,126 @@
                     </LinearLayout>
                 </LinearLayout>
             </ScrollView>
-        </FrameLayout>
 
-        <!-- FLOATING ACTION BUTTON (CONNECT) -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btnConnect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end|bottom"
-            android:layout_margin="16dp"
-            android:src="@android:drawable/ic_media_play"
-            app:backgroundTint="#1D4ED8"
-            app:tint="#FFFFFF" />
+            <!-- VIEW PENGATURAN: VPN PER APLIKASI -->
+            <LinearLayout
+                android:id="@+id/layoutPengaturan"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:paddingHorizontal="14dp"
+                android:paddingTop="10dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ⓘ Menampilkan aplikasi terpasang untuk memilih mana yang lewat VPN. Daftarnya tetap di perangkat ini."
+                    android:textColor="#9CA3AF"
+                    android:textSize="11.5sp" />
+
+                <!-- PILIH MODE (KLIK UNTUK DIALOG) -->
+                <LinearLayout
+                    android:id="@+id/btnSelectSplitMode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:orientation="vertical"
+                    android:paddingVertical="6dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Mode"
+                        android:textColor="#F3F4F6"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSplitModeDesc"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Semua aplikasi"
+                        android:textColor="#9CA3AF"
+                        android:textSize="12.5sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="ⓘ Sambungkan ulang agar berlaku."
+                    android:textColor="#9CA3AF"
+                    android:textSize="11.5sp" />
+
+                <TextView
+                    android:id="@+id/tvSelectedAppsCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="0 dipilih"
+                    android:textColor="#E5E7EB"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold" />
+
+                <!-- FILTER CHIPS: APLIKASI PENGGUNA / SEMUA APLIKASI -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnFilterUserApps"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginEnd="8dp"
+                        android:backgroundTint="#2C3340"
+                        android:text="Aplikasi pengguna"
+                        android:textAllCaps="false"
+                        android:textColor="#E2E8F0"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btnFilterAllApps"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:backgroundTint="#15181E"
+                        android:text="Semua aplikasi"
+                        android:textAllCaps="false"
+                        android:textColor="#9CA3AF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <!-- SEARCH BAR -->
+                <EditText
+                    android:id="@+id/etSearchApps"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@drawable/bg_input"
+                    android:drawableStart="@android:drawable/ic_menu_search"
+                    android:drawablePadding="8dp"
+                    android:hint="Cari aplikasi..."
+                    android:paddingHorizontal="12dp"
+                    android:singleLine="true"
+                    android:textColor="#F3F4F6"
+                    android:textColorHint="#6B7280"
+                    android:textSize="13sp" />
+
+                <!-- LIST APLIKASI TERPASANG -->
+                <ListView
+                    android:id="@+id/lvInstalledApps"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:divider="#1E222A"
+                    android:dividerHeight="1dp" />
+            </LinearLayout>
+        </FrameLayout>
 
         <!-- BOTTOM NAV BAR -->
         <LinearLayout
@@ -693,6 +826,44 @@
                     android:textColor="#9CA3AF"
                     android:textSize="10sp" />
             </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navPengaturan"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/pillPengaturan"
+                    android:layout_width="56dp"
+                    android:layout_height="24dp"
+                    android:gravity="center"
+                    android:text="⚙️"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/txtNavPengaturan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Pengaturan"
+                    android:textColor="#9CA3AF"
+                    android:textSize="10sp" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+
+    <!-- FLOATING ACTION BUTTON (CONNECT) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnConnect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="72dp"
+        android:src="@android:drawable/ic_media_play"
+        app:backgroundTint="#1D4ED8"
+        app:tint="#FFFFFF" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

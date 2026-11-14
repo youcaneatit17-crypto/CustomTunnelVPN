@@ -193,15 +193,54 @@ class TunnelVpnService : VpnService() {
                 throw IllegalStateException("Gagal membuat terowongan SSH/SlowDNS (Timeout atau Auth ditolak)")
             }
 
-            val pfd = vpnInterface ?: Builder()
-                .setSession("Custom Tunnel VPN")
-                .setMtu(1400)
-                .addAddress("10.0.0.2", 24)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
-                .addDisallowedApplication(packageName)
-                .establish()
+            val pfd = vpnInterface ?: Builder().apply {
+                setSession("Custom Tunnel VPN")
+                setMtu(1400)
+                addAddress("10.0.0.2", 24)
+                addRoute("0.0.0.0", 0)
+                addDnsServer("8.8.8.8")
+                addDnsServer("1.1.1.1")
+
+                val stPrefs = getSharedPreferences("split_tunnel", MODE_PRIVATE)
+                val stMode = stPrefs.getString("mode", "all") ?: "all"
+                val stPkgs = stPrefs.getStringSet("packages", emptySet()) ?: emptySet()
+
+                when (stMode) {
+                    "exclude" -> {
+                        try { addDisallowedApplication(packageName) } catch (_: Exception) {}
+                        var count = 0
+                        for (pkg in stPkgs) {
+                            if (pkg != packageName) {
+                                try {
+                                    addDisallowedApplication(pkg)
+                                    count++
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        TunnelLogger.log("VPN per aplikasi: $count aplikasi dikecualikan.", "#B0BEC5")
+                    }
+                    "include" -> {
+                        var count = 0
+                        for (pkg in stPkgs) {
+                            if (pkg != packageName) {
+                                try {
+                                    addAllowedApplication(pkg)
+                                    count++
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        if (count == 0) {
+                            try { addDisallowedApplication(packageName) } catch (_: Exception) {}
+                            TunnelLogger.log("VPN per aplikasi: Mode Hanya Terpilih kosong, fallback semua aplikasi.", "#FFB74D")
+                        } else {
+                            TunnelLogger.log("VPN per aplikasi: Hanya $count aplikasi terpilih lewat VPN.", "#B0BEC5")
+                        }
+                    }
+                    else -> {
+                        try { addDisallowedApplication(packageName) } catch (_: Exception) {}
+                    }
+                }
+            }.establish()
                 ?.also { vpnInterface = it }
                 ?: throw IllegalStateException("Gagal membuat TUN interface")
 
