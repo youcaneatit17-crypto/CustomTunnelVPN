@@ -39,8 +39,11 @@ jobs:
           cd /tmp/dnstt/dnstt-client
           GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libdnstt.so
 
-          # 2. Build BadVPN tun2socks dengan makro backend Linux/Android (epoll + signalfd)
+          # 2. Build BadVPN tun2socks (hapus -lpthread & -lrt untuk Android Bionic libc)
           git clone https://github.com/ambrop72/badvpn.git /tmp/badvpn
+          cd /tmp/badvpn
+          find . -name "CMakeLists.txt" -exec sed -i 's/\bpthread\b//g; s/\brt\b//g' {} +
+          
           mkdir -p /tmp/badvpn/build && cd /tmp/badvpn/build
           cmake .. \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
