@@ -641,33 +641,172 @@ func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, d
 			return
 		}
 
-		go func() {
-			buf := make([]byte, 4096)
-			for {
-				n, srcAddr, err := udpConn.ReadFromUDP(buf)
-				if err != nil {
-					return
-				}
-				pktCopy := make([]byte, n)
-				copy(pktCopy, buf[:n])
+				go func() {
+					var gwMu sync.Mutex
+					var gwConn net.Conn
+					var clientUDPAddr *net.UDPAddr
+					var connsMu sync.RWMutex
+					conns := make(map[uint16]string)
+					connIDs := make(map[string]uint16)
+					var nextID uint16 = 1
 
-				dstHost, dstPort, socksHdr, dnsPayload, ok := parseSocksUDPPacket(pktCopy)
-				if !ok || dstPort != 53 {
-					continue
-				}
+					defer func() {
+						gwMu.Lock()
+						if gwConn != nil {
+							_ = gwConn.Close()
+						}
+						gwMu.Unlock()
+					}()
 
-				go func(addr *net.UDPAddr, h string, sh []byte, q []byte) {
-					dnsResp, err := resolveDNS(mgr, cache, h, q)
-					if err != nil {
-						return
+					ensureUDPGW := func() (net.Conn, error) {
+						gwMu.Lock()
+						defer gwMu.Unlock()
+						if gwConn != nil {
+							return gwConn, nil
+						}
+						c, err := dialSSHWithTimeout(mgr.getClient(), "tcp", "127.0.0.1:7300", 8*time.Second)
+						if err != nil {
+							return nil, err
+						}
+						gwConn = c
+						go func(conn net.Conn) {
+							defer func() {
+								_ = conn.Close()
+								gwMu.Lock()
+								if gwConn == conn {
+									gwConn = nil
+								}
+								gwMu.Unlock()
+							}()
+							hdrBuf := make([]byte, 3)
+							for {
+								_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+								if _, err := io.ReadFull(conn, hdrBuf); err != nil {
+									return
+								}
+								pktLen := int(binary.BigEndian.Uint16(hdrBuf[:2]))
+								flags := hdrBuf[2]
+								if pktLen <= 0 || pktLen > 8192 {
+									return
+								}
+								body := make([]byte, pktLen)
+								if _, err := io.ReadFull(conn, body); err != nil {
+									return
+								}
+								if (flags&0x01) != 0 {
+									continue // keepalive
+								}
+								addrLen := 6
+								if (flags&0x04) != 0 {
+									addrLen = 18
+								}
+								if len(body) < 2+addrLen {
+									continue
+								}
+								payload := body[2+addrLen:]
+								var socksResp []byte
+								if addrLen == 6 {
+									socksResp = make([]byte, 10+len(payload))
+									socksResp[3] = 0x01
+									copy(socksResp[4:10], body[2:8])
+									copy(socksResp[10:], payload)
+								} else {
+									socksResp = make([]byte, 22+len(payload))
+									socksResp[3] = 0x04
+									copy(socksResp[4:22], body[2:20])
+									copy(socksResp[22:], payload)
+								}
+								connsMu.RLock()
+								dst := clientUDPAddr
+								connsMu.RUnlock()
+								if dst != nil {
+									mgr.noteTraffic()
+									_, _ = udpConn.WriteToUDP(socksResp, dst)
+								}
+							}
+						}(c)
+						return c, nil
 					}
-					out := make([]byte, len(sh)+len(dnsResp))
-					copy(out, sh)
-					copy(out[len(sh):], dnsResp)
-					_, _ = udpConn.WriteToUDP(out, addr)
-				}(srcAddr, dstHost, socksHdr, dnsPayload)
-			}
-		}()
+
+					buf := make([]byte, 4096)
+					for {
+						n, srcAddr, err := udpConn.ReadFromUDP(buf)
+						if err != nil {
+							return
+						}
+						connsMu.Lock()
+						clientUDPAddr = srcAddr
+						connsMu.Unlock()
+
+						pktCopy := make([]byte, n)
+						copy(pktCopy, buf[:n])
+
+						dstHost, dstPort, socksHdr, udpPayload, ok := parseSocksUDPPacket(pktCopy)
+						if !ok {
+							continue
+						}
+
+						if dstPort == 53 {
+							go func(addr *net.UDPAddr, h string, sh []byte, q []byte) {
+								dnsResp, err := resolveDNS(mgr, cache, h, q)
+								if err != nil {
+									return
+								}
+								out := make([]byte, len(sh)+len(dnsResp))
+								copy(out, sh)
+								copy(out[len(sh):], dnsResp)
+								_, _ = udpConn.WriteToUDP(out, addr)
+							}(srcAddr, dstHost, socksHdr, udpPayload)
+							continue
+						}
+
+						// Teruskan UDP non-DNS (WebRTC/Video Call/Game) ke BadVPN UDPGW (127.0.0.1:7300)
+						go func(h string, p int, payload []byte) {
+							ip := net.ParseIP(h)
+							if ip == nil {
+								return
+							}
+							ip4 := ip.To4()
+							if ip4 == nil {
+								return
+							}
+							conn, err := ensureUDPGW()
+							if err != nil {
+								return
+							}
+							key := fmt.Sprintf("%s:%d", ip4.String(), p)
+							connsMu.Lock()
+							cid, exists := connIDs[key]
+							if !exists {
+								cid = nextID
+								nextID++
+								connIDs[key] = cid
+								conns[cid] = key
+							}
+							connsMu.Unlock()
+
+							// Format frame UDPGW: [2B len][1B flags=0x00][2B connID][4B IPv4][2B port][payload]
+							bodyLen := 2 + 4 + 2 + len(payload)
+							frame := make([]byte, 3+bodyLen)
+							binary.BigEndian.PutUint16(frame[0:2], uint16(bodyLen))
+							frame[2] = 0x00
+							binary.BigEndian.PutUint16(frame[3:5], cid)
+							copy(frame[5:9], ip4)
+							binary.BigEndian.PutUint16(frame[9:11], uint16(p))
+							copy(frame[11:], payload)
+
+							gwMu.Lock()
+							_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+							_, wErr := conn.Write(frame)
+							gwMu.Unlock()
+							if wErr != nil {
+								_ = conn.Close()
+							} else {
+								mgr.noteTraffic()
+							}
+						}(dstHost, dstPort, udpPayload)
+					}
+				}()
 
 		_, _ = io.Copy(io.Discard, clientConn)
 
