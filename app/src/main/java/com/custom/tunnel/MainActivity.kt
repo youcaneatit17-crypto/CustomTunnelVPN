@@ -721,8 +721,7 @@ class MainActivity : AppCompatActivity() {
 
         if (arr.length() == 0) {
             val emptyTv = TextView(this).apply {
-                text = "Belum ada profil.
-Ketuk tombol + di pojok kanan atas untuk menambah profil SSH."
+                text = "Belum ada profil.\nKetuk tombol + di pojok kanan atas untuk menambah profil SSH."
                 setTextColor(Color.parseColor("#9CA3AF"))
                 textSize = 13f
                 gravity = Gravity.CENTER

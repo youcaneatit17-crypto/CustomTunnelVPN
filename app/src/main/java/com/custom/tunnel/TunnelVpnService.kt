@@ -330,8 +330,7 @@ class TunnelVpnService : VpnService() {
             try {
                 LocalSocket().use { client ->
                     client.connect(LocalSocketAddress(sock, LocalSocketAddress.Namespace.ABSTRACT))
-                    client.outputStream.write("REFRESH
-".toByteArray())
+                    client.outputStream.write("REFRESH\n".toByteArray())
                     client.outputStream.flush()
                 }
             } catch (e: Exception) {
