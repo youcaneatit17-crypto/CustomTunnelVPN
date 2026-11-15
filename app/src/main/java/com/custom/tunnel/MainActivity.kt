@@ -8,14 +8,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import android.net.TrafficStats
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.text.Editable
 import android.text.Html
 import android.text.TextWatcher
@@ -41,6 +44,7 @@ data class AppEntry(
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var etEditProfileName: EditText
     private lateinit var spDnsType: Spinner
     private lateinit var etDns: EditText
     private lateinit var etNs: EditText
@@ -50,25 +54,39 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etSshUser: EditText
     private lateinit var etSshPass: EditText
     private lateinit var etUdpgw: EditText
+
+    private lateinit var btnModeSingle: Button
+    private lateinit var btnModeMulti: Button
+    private lateinit var btnMethodSlowDns: Button
+    private lateinit var btnMethodDirect: Button
+    private lateinit var cardSlowDnsSection: LinearLayout
+
     private lateinit var btnConnect: FloatingActionButton
+    private lateinit var btnSaveEditorFab: FloatingActionButton
     private lateinit var btnRefresh: Button
     private lateinit var btnCleanLog: Button
     private lateinit var tvLogs: TextView
     private lateinit var tvHeaderStatus: TextView
+    private lateinit var tvActiveProtocolBadge: TextView
     private lateinit var tvStatDown: TextView
     private lateinit var tvStatDownPeak: TextView
     private lateinit var tvStatUp: TextView
     private lateinit var tvStatUpPeak: TextView
     private lateinit var tvStatusDotLabel: TextView
     private lateinit var tvLocalIp: TextView
+    private lateinit var tvHomeProfileName: TextView
+    private lateinit var tvHomeProfileSub: TextView
     private lateinit var tvSplitSummaryHome: TextView
 
     private lateinit var topBarMain: LinearLayout
     private lateinit var topBarSettings: LinearLayout
+    private lateinit var btnBackFromEditor: ImageButton
+    private lateinit var btnAddProfileMenu: TextView
     private lateinit var tvTopTitle: TextView
     private lateinit var layoutUtama: ScrollView
     private lateinit var layoutLog: LinearLayout
     private lateinit var layoutProfil: ScrollView
+    private lateinit var layoutProfileEditor: ScrollView
     private lateinit var layoutPengaturan: LinearLayout
     private lateinit var scrollLog: ScrollView
     private lateinit var tabLayout: TabLayout
@@ -83,14 +101,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtNavProfil: TextView
     private lateinit var txtNavPengaturan: TextView
 
-    private lateinit var etNewProfileName: EditText
-    private lateinit var btnSaveProfile: Button
     private lateinit var profilesContainer: LinearLayout
     private lateinit var etConfigJson: EditText
     private lateinit var btnExportJson: Button
     private lateinit var btnImportJson: Button
 
-    // Split Tunnel UI
     private lateinit var tvSplitModeDesc: TextView
     private lateinit var tvSelectedAppsCount: TextView
     private lateinit var btnFilterUserApps: Button
@@ -103,9 +118,16 @@ class MainActivity : AppCompatActivity() {
     private var logRenderPending = false
     private var currentNav = "beranda"
 
-    private var isTrafficActive = false
-    private var maxDownPeak = 0L
-    private var maxUpPeak = 0L
+    private var editingProfileId: String? = null
+    private var editorProtocol = "SSH"
+    private var editorMethod = "SlowDNS"
+
+    private var isTrafficMonitorActive = false
+    private var lastRxBytes = 0L
+    private var lastTxBytes = 0L
+    private var lastSampleTime = 0L
+    private var maxDownPeakBps = 0L
+    private var maxUpPeakBps = 0L
 
     private var allInstalledApps: List<AppEntry> = emptyList()
     private var filteredApps: List<AppEntry> = emptyList()
@@ -126,80 +148,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        spDnsType = findViewById(R.id.spDnsType)
-        etDns = findViewById(R.id.etDns)
-        etNs = findViewById(R.id.etNs)
-        etPubkey = findViewById(R.id.etPubkey)
-        etSessions = findViewById(R.id.etSessions)
-        etSshHostPort = findViewById(R.id.etSshHostPort)
-        etSshUser = findViewById(R.id.etSshUser)
-        etSshPass = findViewById(R.id.etSshPass)
-        etUdpgw = findViewById(R.id.etUdpgw)
-        btnConnect = findViewById(R.id.btnConnect)
-        btnRefresh = findViewById(R.id.btnRefresh)
-        btnCleanLog = findViewById(R.id.btnCleanLog)
-        tvLogs = findViewById(R.id.tvLogs)
-        tvHeaderStatus = findViewById(R.id.tvHeaderStatus)
-        tvStatDown = findViewById(R.id.tvStatDown)
-        tvStatDownPeak = findViewById(R.id.tvStatDownPeak)
-        tvStatUp = findViewById(R.id.tvStatUp)
-        tvStatUpPeak = findViewById(R.id.tvStatUpPeak)
-        tvStatusDotLabel = findViewById(R.id.tvStatusDotLabel)
-        tvLocalIp = findViewById(R.id.tvLocalIp)
-        tvSplitSummaryHome = findViewById(R.id.tvSplitSummaryHome)
-
-        topBarMain = findViewById(R.id.topBarMain)
-        topBarSettings = findViewById(R.id.topBarSettings)
-        tvTopTitle = findViewById(R.id.tvTopTitle)
-        layoutUtama = findViewById(R.id.layoutUtama)
-        layoutLog = findViewById(R.id.layoutLog)
-        layoutProfil = findViewById(R.id.layoutProfil)
-        layoutPengaturan = findViewById(R.id.layoutPengaturan)
-        scrollLog = findViewById(R.id.scrollLog)
-        tabLayout = findViewById(R.id.tabLayout)
-
-        navBeranda = findViewById(R.id.navBeranda)
-        navProfil = findViewById(R.id.navProfil)
-        navPengaturan = findViewById(R.id.navPengaturan)
-        pillBeranda = findViewById(R.id.pillBeranda)
-        pillProfil = findViewById(R.id.pillProfil)
-        pillPengaturan = findViewById(R.id.pillPengaturan)
-        txtNavBeranda = findViewById(R.id.txtNavBeranda)
-        txtNavProfil = findViewById(R.id.txtNavProfil)
-        txtNavPengaturan = findViewById(R.id.txtNavPengaturan)
-
-        etNewProfileName = findViewById(R.id.etNewProfileName)
-        btnSaveProfile = findViewById(R.id.btnSaveProfile)
-        profilesContainer = findViewById(R.id.profilesContainer)
-        etConfigJson = findViewById(R.id.etConfigJson)
-        btnExportJson = findViewById(R.id.btnExportJson)
-        btnImportJson = findViewById(R.id.btnImportJson)
-
-        tvSplitModeDesc = findViewById(R.id.tvSplitModeDesc)
-        tvSelectedAppsCount = findViewById(R.id.tvSelectedAppsCount)
-        btnFilterUserApps = findViewById(R.id.btnFilterUserApps)
-        btnFilterAllApps = findViewById(R.id.btnFilterAllApps)
-        etSearchApps = findViewById(R.id.etSearchApps)
-        lvInstalledApps = findViewById(R.id.lvInstalledApps)
-
-        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, dnsTypes) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                return (super.getView(position, convertView, parent) as TextView).apply {
-                    setTextColor(Color.WHITE)
-                    text = "Tipe DNS: ${dnsTypes[position]}"
-                }
-            }
-            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
-                return (super.getDropDownView(position, convertView, parent) as TextView).apply {
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(Color.parseColor("#1D2025"))
-                    setPadding(24, 24, 24, 24)
-                }
-            }
-        }
-        spDnsType.adapter = adapter
-
-        loadSavedConfig()
+        bindViews()
+        setupDnsSpinner()
+        setupCollapsibleCards()
+        migrateLegacyConfigIfNeeded()
+        refreshActiveProfileHomeCard()
         renderProfilesList()
         updateSplitTunnelLabels()
         updateButtonState()
@@ -209,33 +162,60 @@ class MainActivity : AppCompatActivity() {
         navBeranda.setOnClickListener { switchNav("beranda") }
         navProfil.setOnClickListener { switchNav("profil") }
         navPengaturan.setOnClickListener { switchNav("pengaturan") }
-        findViewById<Button>(R.id.btnLihatSplit).setOnClickListener { switchNav("pengaturan") }
+
+        btnBackFromEditor.setOnClickListener { switchNav("profil") }
+        btnAddProfileMenu.setOnClickListener { showAddProtocolPopup(it) }
+
+        findViewById<Button>(R.id.btnHomePickProfile).setOnClickListener { showQuickProfileSelector() }
+        findViewById<TextView>(R.id.btnHomeEditProfile).setOnClickListener {
+            val active = getActiveProfile()
+            if (active != null) openProfileEditor(active) else switchNav("profil")
+        }
+        findViewById<TextView>(R.id.btnLihatSplit).setOnClickListener { switchNav("pengaturan") }
         findViewById<ImageButton>(R.id.btnBackFromSettings).setOnClickListener { switchNav("beranda") }
 
-        findViewById<LinearLayout>(R.id.btnSelectSplitMode).setOnClickListener { showSplitModeDialog() }
+        btnModeSingle.setOnClickListener {
+            etSessions.setText("1")
+            updateEditorChips()
+        }
+        btnModeMulti.setOnClickListener {
+            etSessions.setText("2")
+            updateEditorChips()
+        }
+        btnMethodSlowDns.setOnClickListener {
+            editorMethod = "SlowDNS"
+            updateEditorChips()
+        }
+        btnMethodDirect.setOnClickListener {
+            editorMethod = "Direct"
+            updateEditorChips()
+        }
 
+        btnSaveEditorFab.setOnClickListener { saveEditorProfile() }
+
+        findViewById<LinearLayout>(R.id.btnSelectSplitMode).setOnClickListener { showSplitModeDialog() }
         findViewById<TextView>(R.id.btnClearSelectedApps).setOnClickListener {
             getSharedPreferences("split_tunnel", MODE_PRIVATE).edit()
                 .putStringSet("packages", emptySet()).apply()
             updateSplitTunnelLabels()
             filterInstalledApps()
-            Toast.makeText(this, "Semua centang aplikasi dibersihkan", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Pilihan aplikasi dibersihkan", Toast.LENGTH_SHORT).show()
         }
 
         btnFilterUserApps.setOnClickListener {
             showSystemApps = false
-            btnFilterUserApps.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2C3340"))
+            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
             btnFilterUserApps.setTextColor(Color.parseColor("#E2E8F0"))
-            btnFilterAllApps.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#15181E"))
+            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
             btnFilterAllApps.setTextColor(Color.parseColor("#9CA3AF"))
             filterInstalledApps()
         }
 
         btnFilterAllApps.setOnClickListener {
             showSystemApps = true
-            btnFilterAllApps.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2C3340"))
+            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
             btnFilterAllApps.setTextColor(Color.parseColor("#E2E8F0"))
-            btnFilterUserApps.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#15181E"))
+            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
             btnFilterUserApps.setTextColor(Color.parseColor("#9CA3AF"))
             filterInstalledApps()
         }
@@ -270,7 +250,7 @@ class MainActivity : AppCompatActivity() {
                     uiHandler.postDelayed({
                         logRenderPending = false
                         renderLogsNow()
-                    }, 200)
+                    }, 180)
                 }
             }
         }
@@ -283,7 +263,12 @@ class MainActivity : AppCompatActivity() {
                 startService(stopIntent)
                 updateButtonState()
             } else {
-                saveConfig()
+                val active = getActiveProfile()
+                if (active == null) {
+                    Toast.makeText(this, "Buat atau pilih profil dulu", Toast.LENGTH_SHORT).show()
+                    switchNav("profil")
+                    return@setOnClickListener
+                }
                 switchNav("beranda")
                 tabLayout.getTabAt(1)?.select()
                 prepareAndStartVpn()
@@ -305,9 +290,121 @@ class MainActivity : AppCompatActivity() {
             tvLogs.text = ""
         }
 
-        btnSaveProfile.setOnClickListener { saveNewProfile() }
-        btnExportJson.setOnClickListener { exportConfigToJson() }
-        btnImportJson.setOnClickListener { importConfigFromJson() }
+        btnExportJson.setOnClickListener { exportActiveProfileToJson() }
+        btnImportJson.setOnClickListener { importProfileFromJson() }
+    }
+
+    private fun bindViews() {
+        etEditProfileName = findViewById(R.id.etEditProfileName)
+        spDnsType = findViewById(R.id.spDnsType)
+        etDns = findViewById(R.id.etDns)
+        etNs = findViewById(R.id.etNs)
+        etPubkey = findViewById(R.id.etPubkey)
+        etSessions = findViewById(R.id.etSessions)
+        etSshHostPort = findViewById(R.id.etSshHostPort)
+        etSshUser = findViewById(R.id.etSshUser)
+        etSshPass = findViewById(R.id.etSshPass)
+        etUdpgw = findViewById(R.id.etUdpgw)
+
+        btnModeSingle = findViewById(R.id.btnModeSingle)
+        btnModeMulti = findViewById(R.id.btnModeMulti)
+        btnMethodSlowDns = findViewById(R.id.btnMethodSlowDns)
+        btnMethodDirect = findViewById(R.id.btnMethodDirect)
+        cardSlowDnsSection = findViewById(R.id.cardSlowDnsSection)
+
+        btnConnect = findViewById(R.id.btnConnect)
+        btnSaveEditorFab = findViewById(R.id.btnSaveEditorFab)
+        btnRefresh = findViewById(R.id.btnRefresh)
+        btnCleanLog = findViewById(R.id.btnCleanLog)
+        tvLogs = findViewById(R.id.tvLogs)
+        tvHeaderStatus = findViewById(R.id.tvHeaderStatus)
+        tvActiveProtocolBadge = findViewById(R.id.tvActiveProtocolBadge)
+        tvStatDown = findViewById(R.id.tvStatDown)
+        tvStatDownPeak = findViewById(R.id.tvStatDownPeak)
+        tvStatUp = findViewById(R.id.tvStatUp)
+        tvStatUpPeak = findViewById(R.id.tvStatUpPeak)
+        tvStatusDotLabel = findViewById(R.id.tvStatusDotLabel)
+        tvLocalIp = findViewById(R.id.tvLocalIp)
+        tvHomeProfileName = findViewById(R.id.tvHomeProfileName)
+        tvHomeProfileSub = findViewById(R.id.tvHomeProfileSub)
+        tvSplitSummaryHome = findViewById(R.id.tvSplitSummaryHome)
+
+        topBarMain = findViewById(R.id.topBarMain)
+        topBarSettings = findViewById(R.id.topBarSettings)
+        btnBackFromEditor = findViewById(R.id.btnBackFromEditor)
+        btnAddProfileMenu = findViewById(R.id.btnAddProfileMenu)
+        tvTopTitle = findViewById(R.id.tvTopTitle)
+        layoutUtama = findViewById(R.id.layoutUtama)
+        layoutLog = findViewById(R.id.layoutLog)
+        layoutProfil = findViewById(R.id.layoutProfil)
+        layoutProfileEditor = findViewById(R.id.layoutProfileEditor)
+        layoutPengaturan = findViewById(R.id.layoutPengaturan)
+        scrollLog = findViewById(R.id.scrollLog)
+        tabLayout = findViewById(R.id.tabLayout)
+
+        navBeranda = findViewById(R.id.navBeranda)
+        navProfil = findViewById(R.id.navProfil)
+        navPengaturan = findViewById(R.id.navPengaturan)
+        pillBeranda = findViewById(R.id.pillBeranda)
+        pillProfil = findViewById(R.id.pillProfil)
+        pillPengaturan = findViewById(R.id.pillPengaturan)
+        txtNavBeranda = findViewById(R.id.txtNavBeranda)
+        txtNavProfil = findViewById(R.id.txtNavProfil)
+        txtNavPengaturan = findViewById(R.id.txtNavPengaturan)
+
+        profilesContainer = findViewById(R.id.profilesContainer)
+        etConfigJson = findViewById(R.id.etConfigJson)
+        btnExportJson = findViewById(R.id.btnExportJson)
+        btnImportJson = findViewById(R.id.btnImportJson)
+
+        tvSplitModeDesc = findViewById(R.id.tvSplitModeDesc)
+        tvSelectedAppsCount = findViewById(R.id.tvSelectedAppsCount)
+        btnFilterUserApps = findViewById(R.id.btnFilterUserApps)
+        btnFilterAllApps = findViewById(R.id.btnFilterAllApps)
+        etSearchApps = findViewById(R.id.etSearchApps)
+        lvInstalledApps = findViewById(R.id.lvInstalledApps)
+    }
+
+    private fun setupDnsSpinner() {
+        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, dnsTypes) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                return (super.getView(position, convertView, parent) as TextView).apply {
+                    setTextColor(Color.WHITE)
+                    text = dnsTypes[position]
+                }
+            }
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                return (super.getDropDownView(position, convertView, parent) as TextView).apply {
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#1D2025"))
+                    setPadding(24, 24, 24, 24)
+                }
+            }
+        }
+        spDnsType.adapter = adapter
+    }
+
+    private fun setupCollapsibleCards() {
+        val pairs = listOf(
+            Triple(R.id.hdrCardMode, R.id.bodyCardMode, R.id.arrowCardMode),
+            Triple(R.id.hdrCardMethod, R.id.bodyCardMethod, R.id.arrowCardMethod),
+            Triple(R.id.hdrCardSlowDns, R.id.bodyCardSlowDns, R.id.arrowCardSlowDns),
+            Triple(R.id.hdrCardSsh, R.id.bodyCardSsh, R.id.arrowCardSsh)
+        )
+        for ((hdrId, bodyId, arrowId) in pairs) {
+            val hdr = findViewById<LinearLayout>(hdrId)
+            val body = findViewById<LinearLayout>(bodyId)
+            val arrow = findViewById<TextView>(arrowId)
+            hdr.setOnClickListener {
+                if (body.visibility == View.VISIBLE) {
+                    body.visibility = View.GONE
+                    arrow.text = "⌄"
+                } else {
+                    body.visibility = View.VISIBLE
+                    arrow.text = "⌃"
+                }
+            }
+        }
     }
 
     private fun switchNav(target: String) {
@@ -323,7 +420,11 @@ class MainActivity : AppCompatActivity() {
         layoutUtama.visibility = View.GONE
         layoutLog.visibility = View.GONE
         layoutProfil.visibility = View.GONE
+        layoutProfileEditor.visibility = View.GONE
         layoutPengaturan.visibility = View.GONE
+        btnBackFromEditor.visibility = View.GONE
+        btnAddProfileMenu.visibility = View.GONE
+        btnSaveEditorFab.hide()
 
         when (target) {
             "beranda" -> {
@@ -331,6 +432,7 @@ class MainActivity : AppCompatActivity() {
                 topBarSettings.visibility = View.GONE
                 tvTopTitle.text = "Custom Tunnel"
                 tvTopTitle.setTextColor(Color.parseColor("#FB923C"))
+                tvHeaderStatus.visibility = View.VISIBLE
                 tabLayout.visibility = View.VISIBLE
                 btnConnect.show()
                 if (tabLayout.selectedTabPosition == 0) {
@@ -340,6 +442,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 pillBeranda.setBackgroundResource(R.drawable.bg_nav_pill)
                 txtNavBeranda.setTextColor(Color.parseColor("#E5E7EB"))
+                refreshActiveProfileHomeCard()
                 updateSplitTunnelLabels()
             }
             "profil" -> {
@@ -347,10 +450,26 @@ class MainActivity : AppCompatActivity() {
                 topBarSettings.visibility = View.GONE
                 tvTopTitle.text = "Profil"
                 tvTopTitle.setTextColor(Color.WHITE)
+                tvHeaderStatus.visibility = View.GONE
+                btnAddProfileMenu.visibility = View.VISIBLE
                 tabLayout.visibility = View.GONE
-                btnConnect.show()
+                btnConnect.hide()
                 layoutProfil.visibility = View.VISIBLE
                 renderProfilesList()
+                pillProfil.setBackgroundResource(R.drawable.bg_nav_pill)
+                txtNavProfil.setTextColor(Color.parseColor("#E5E7EB"))
+            }
+            "editor" -> {
+                topBarMain.visibility = View.VISIBLE
+                topBarSettings.visibility = View.GONE
+                btnBackFromEditor.visibility = View.VISIBLE
+                tvTopTitle.text = editorProtocol
+                tvTopTitle.setTextColor(Color.WHITE)
+                tvHeaderStatus.visibility = View.GONE
+                tabLayout.visibility = View.GONE
+                btnConnect.hide()
+                btnSaveEditorFab.show()
+                layoutProfileEditor.visibility = View.VISIBLE
                 pillProfil.setBackgroundResource(R.drawable.bg_nav_pill)
                 txtNavProfil.setTextColor(Color.parseColor("#E5E7EB"))
             }
@@ -365,6 +484,400 @@ class MainActivity : AppCompatActivity() {
                 updateSplitTunnelLabels()
                 loadInstalledAppsAsync()
             }
+        }
+    }
+
+    private fun showAddProtocolPopup(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "S   SSH")
+        popup.menu.add(0, 2, 1, "V   V2Ray (Segera)")
+        popup.menu.add(0, 3, 2, "U   UDP Custom (Segera)")
+        popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == 1) {
+                openProfileEditor(null)
+            } else {
+                Toast.makeText(this, "Protokol ${item.title.toString().trim()} siap ditambahkan berikutnya", Toast.LENGTH_SHORT).show()
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun openProfileEditor(profile: JSONObject?) {
+        editorProtocol = profile?.optString("protocol", "SSH") ?: "SSH"
+        if (profile == null) {
+            editingProfileId = null
+            val list = getProfilesArray()
+            etEditProfileName.setText("ss${list.length() + 1}")
+            editorMethod = "SlowDNS"
+            spDnsType.setSelection(0)
+            etDns.setText("1.1.1.1")
+            etNs.setText("")
+            etPubkey.setText("")
+            etSessions.setText("1")
+            etSshHostPort.setText("127.0.0.1:22")
+            etSshUser.setText("")
+            etSshPass.setText("")
+            etUdpgw.setText("7300")
+        } else {
+            editingProfileId = profile.optString("id")
+            etEditProfileName.setText(profile.optString("name", "ss"))
+            editorMethod = profile.optString("method", "SlowDNS")
+            spDnsType.setSelection(profile.optInt("dnsTypeIdx", 0).coerceIn(0, dnsTypes.lastIndex))
+            etDns.setText(profile.optString("dns", "1.1.1.1"))
+            etNs.setText(profile.optString("ns", ""))
+            etPubkey.setText(profile.optString("pubkey", ""))
+            etSessions.setText(profile.optString("sessions", "1"))
+            etSshHostPort.setText(profile.optString("sshHostPort", "127.0.0.1:22"))
+            etSshUser.setText(profile.optString("user", ""))
+            etSshPass.setText(profile.optString("pass", ""))
+            etUdpgw.setText(profile.optString("udpgw", "7300"))
+        }
+        updateEditorChips()
+        switchNav("editor")
+    }
+
+    private fun updateEditorChips() {
+        val sess = etSessions.text.toString().trim().toIntOrNull() ?: 1
+        if (sess <= 1) {
+            btnModeSingle.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
+            btnModeSingle.setTextColor(Color.WHITE)
+            btnModeMulti.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
+            btnModeMulti.setTextColor(Color.parseColor("#9CA3AF"))
+        } else {
+            btnModeMulti.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
+            btnModeMulti.setTextColor(Color.WHITE)
+            btnModeSingle.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
+            btnModeSingle.setTextColor(Color.parseColor("#9CA3AF"))
+        }
+
+        if (editorMethod == "SlowDNS") {
+            btnMethodSlowDns.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
+            btnMethodSlowDns.setTextColor(Color.WHITE)
+            btnMethodDirect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
+            btnMethodDirect.setTextColor(Color.parseColor("#9CA3AF"))
+            cardSlowDnsSection.visibility = View.VISIBLE
+        } else {
+            btnMethodDirect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
+            btnMethodDirect.setTextColor(Color.WHITE)
+            btnMethodSlowDns.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
+            btnMethodSlowDns.setTextColor(Color.parseColor("#9CA3AF"))
+            cardSlowDnsSection.visibility = View.GONE
+        }
+    }
+
+    private fun saveEditorProfile() {
+        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        val arr = getProfilesArray()
+        val id = editingProfileId ?: System.currentTimeMillis().toString()
+        val name = etEditProfileName.text.toString().trim().ifEmpty { "ss" }
+
+        val obj = JSONObject().apply {
+            put("id", id)
+            put("protocol", editorProtocol)
+            put("name", name)
+            put("method", editorMethod)
+            put("dnsTypeIdx", spDnsType.selectedItemPosition)
+            put("dns", etDns.text.toString().trim().ifEmpty { "1.1.1.1" })
+            put("ns", etNs.text.toString().trim())
+            put("pubkey", etPubkey.text.toString().trim())
+            put("sessions", (etSessions.text.toString().trim().toIntOrNull() ?: 1).coerceIn(1, 4).toString())
+            put("sshHostPort", etSshHostPort.text.toString().trim().ifEmpty { "127.0.0.1:22" })
+            put("user", etSshUser.text.toString().trim())
+            put("pass", etSshPass.text.toString().trim())
+            put("udpgw", etUdpgw.text.toString().trim().ifEmpty { "7300" })
+        }
+
+        val updated = JSONArray()
+        var replaced = false
+        for (i in 0 until arr.length()) {
+            val cur = arr.getJSONObject(i)
+            if (cur.optString("id") == id) {
+                updated.put(obj)
+                replaced = true
+            } else {
+                updated.put(cur)
+            }
+        }
+        if (!replaced) {
+            val prepended = JSONArray().apply {
+                put(obj)
+                for (i in 0 until updated.length()) put(updated.getJSONObject(i))
+            }
+            prefs.edit().putString("list", prepended.toString()).putString("active_id", id).apply()
+        } else {
+            prefs.edit().putString("list", updated.toString()).putString("active_id", id).apply()
+        }
+
+        Toast.makeText(this, "Profil '$name' disimpan & aktif", Toast.LENGTH_SHORT).show()
+        switchNav("profil")
+    }
+
+    private fun migrateLegacyConfigIfNeeded() {
+        val pPrefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        val arr = JSONArray(pPrefs.getString("list", "[]"))
+        if (arr.length() > 0) return
+
+        val old = getSharedPreferences("tunnel_cfg", MODE_PRIVATE)
+        val oldNs = old.getString("ns", "") ?: ""
+        val oldHost = old.getString("sshHostPort", "") ?: ""
+        if (oldNs.isNotEmpty() || oldHost.isNotEmpty()) {
+            val id = System.currentTimeMillis().toString()
+            val item = JSONObject().apply {
+                put("id", id)
+                put("protocol", "SSH")
+                put("name", "ss")
+                put("method", if (oldNs.isNotEmpty()) "SlowDNS" else "Direct")
+                put("dnsTypeIdx", old.getInt("dnsTypeIdx", 0))
+                put("dns", old.getString("dns", "1.1.1.1"))
+                put("ns", oldNs)
+                put("pubkey", old.getString("pubkey", ""))
+                put("sessions", old.getString("sessions", "1"))
+                put("sshHostPort", oldHost.ifEmpty { "127.0.0.1:22" })
+                put("user", old.getString("user", ""))
+                put("pass", old.getString("pass", ""))
+                put("udpgw", old.getString("udpgw", "7300"))
+            }
+            val newArr = JSONArray().apply { put(item) }
+            pPrefs.edit().putString("list", newArr.toString()).putString("active_id", id).apply()
+        }
+    }
+
+    private fun getProfilesArray(): JSONArray {
+        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        return JSONArray(prefs.getString("list", "[]"))
+    }
+
+    private fun getActiveProfile(): JSONObject? {
+        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+        val arr = getProfilesArray()
+        if (arr.length() == 0) return null
+        val activeId = prefs.getString("active_id", "") ?: ""
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            if (obj.optString("id") == activeId) return obj
+        }
+        return arr.getJSONObject(0)
+    }
+
+    private fun setActiveProfileId(id: String) {
+        getSharedPreferences("tunnel_profiles", MODE_PRIVATE).edit().putString("active_id", id).apply()
+        refreshActiveProfileHomeCard()
+        renderProfilesList()
+    }
+
+    private fun refreshActiveProfileHomeCard() {
+        val active = getActiveProfile()
+        if (active == null) {
+            tvHomeProfileName.text = "Belum ada profil"
+            tvHomeProfileSub.text = "Ketuk Lihat lalu + untuk membuat profil"
+            tvActiveProtocolBadge.text = "SSH"
+            return
+        }
+        val name = active.optString("name", "ss")
+        val proto = active.optString("protocol", "SSH")
+        val method = active.optString("method", "SlowDNS")
+        val hostInfo = if (method == "SlowDNS") {
+            active.optString("ns", "").ifEmpty { active.optString("sshHostPort", "") }
+        } else {
+            active.optString("sshHostPort", "")
+        }
+        tvHomeProfileName.text = name
+        tvHomeProfileSub.text = "$proto • $method ($hostInfo)"
+        tvActiveProtocolBadge.text = "$proto • $method"
+    }
+
+    private fun showQuickProfileSelector() {
+        val arr = getProfilesArray()
+        if (arr.length() == 0) {
+            openProfileEditor(null)
+            return
+        }
+        val names = Array(arr.length()) { idx ->
+            val p = arr.getJSONObject(idx)
+            "${p.optString("name")} (${p.optString("protocol", "SSH")} • ${p.optString("method", "SlowDNS")})"
+        }
+        val activeId = getActiveProfile()?.optString("id") ?: ""
+        var checked = 0
+        for (i in 0 until arr.length()) {
+            if (arr.getJSONObject(i).optString("id") == activeId) checked = i
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Pilih Profil Aktif")
+            .setSingleChoiceItems(names, checked) { dialog, which ->
+                val chosen = arr.getJSONObject(which)
+                setActiveProfileId(chosen.optString("id"))
+                dialog.dismiss()
+            }
+            .setNeutralButton("+ Baru") { _, _ -> openProfileEditor(null) }
+            .setNegativeButton("Tutup", null)
+            .show()
+    }
+
+    private fun renderProfilesList() {
+        profilesContainer.removeAllViews()
+        val arr = getProfilesArray()
+        val activeId = getActiveProfile()?.optString("id") ?: ""
+
+        if (arr.length() == 0) {
+            val emptyTv = TextView(this).apply {
+                text = "Belum ada profil.
+Ketuk tombol + di pojok kanan atas untuk menambah profil SSH."
+                setTextColor(Color.parseColor("#9CA3AF"))
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(24, 64, 24, 64)
+            }
+            profilesContainer.addView(emptyTv)
+            return
+        }
+
+        for (i in 0 until arr.length()) {
+            val item = arr.getJSONObject(i)
+            val id = item.optString("id")
+            val name = item.optString("name", "ss")
+            val proto = item.optString("protocol", "SSH")
+            val method = item.optString("method", "SlowDNS")
+            val isSelected = id == activeId
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.bg_card)
+                setPadding(28, 26, 20, 26)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 22 }
+                setOnClickListener {
+                    setActiveProfileId(id)
+                    Toast.makeText(this@MainActivity, "Profil '$name' dipilih", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            val badge = TextView(this).apply {
+                text = proto.take(1).uppercase()
+                setTextColor(if (isSelected) Color.parseColor("#60A5FA") else Color.parseColor("#E5E7EB"))
+                textSize = 13f
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setBackgroundResource(R.drawable.bg_input)
+                layoutParams = LinearLayout.LayoutParams(78, 78).apply { rightMargin = 26 }
+            }
+
+            val infoCol = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val tvName = TextView(this).apply {
+                text = if (isSelected) "$name  ✓" else name
+                setTextColor(Color.WHITE)
+                textSize = 15f
+                setTypeface(null, Typeface.BOLD)
+            }
+            val tvSub = TextView(this).apply {
+                text = "$proto • $method"
+                setTextColor(Color.parseColor("#60A5FA"))
+                textSize = 11.5f
+            }
+            infoCol.addView(tvName)
+            infoCol.addView(tvSub)
+
+            val btnDup = TextView(this).apply {
+                text = "⧉"
+                setTextColor(Color.parseColor("#9CA3AF"))
+                textSize = 18f
+                setPadding(20, 12, 20, 12)
+                setOnClickListener {
+                    val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+                    val curArr = getProfilesArray()
+                    val clone = JSONObject(item.toString()).apply {
+                        put("id", System.currentTimeMillis().toString())
+                        put("name", "$name (copy)")
+                    }
+                    curArr.put(clone)
+                    prefs.edit().putString("list", curArr.toString()).apply()
+                    renderProfilesList()
+                }
+            }
+
+            val btnEdit = TextView(this).apply {
+                text = "✎"
+                setTextColor(Color.parseColor("#E5E7EB"))
+                textSize = 18f
+                setPadding(20, 12, 20, 12)
+                setOnClickListener { openProfileEditor(item) }
+            }
+
+            val btnDel = TextView(this).apply {
+                text = "🗑"
+                setTextColor(Color.parseColor("#F87171"))
+                textSize = 16f
+                setPadding(18, 12, 16, 12)
+                setOnClickListener {
+                    val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+                    val curArr = getProfilesArray()
+                    val updated = JSONArray()
+                    for (j in 0 until curArr.length()) {
+                        if (curArr.getJSONObject(j).optString("id") != id) {
+                            updated.put(curArr.getJSONObject(j))
+                        }
+                    }
+                    prefs.edit().putString("list", updated.toString()).apply()
+                    refreshActiveProfileHomeCard()
+                    renderProfilesList()
+                }
+            }
+
+            card.addView(badge)
+            card.addView(infoCol)
+            card.addView(btnDup)
+            card.addView(btnEdit)
+            card.addView(btnDel)
+            profilesContainer.addView(card)
+        }
+    }
+
+    private fun exportActiveProfileToJson() {
+        val active = getActiveProfile()
+        if (active == null) {
+            Toast.makeText(this, "Belum ada profil untuk disalin", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val jsonStr = active.toString(2)
+        etConfigJson.setText(jsonStr)
+        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cb.setPrimaryClip(ClipData.newPlainText("CustomTunnelProfile", jsonStr))
+        Toast.makeText(this, "JSON profil '${active.optString("name")}' disalin!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun importProfileFromJson() {
+        val raw = etConfigJson.text.toString().trim()
+        if (raw.isEmpty()) {
+            Toast.makeText(this, "Tempel JSON profil dulu", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val obj = JSONObject(raw)
+            val newId = System.currentTimeMillis().toString()
+            obj.put("id", newId)
+            if (!obj.has("name")) obj.put("name", "Imported")
+            if (!obj.has("protocol")) obj.put("protocol", "SSH")
+            if (!obj.has("method")) obj.put("method", "SlowDNS")
+
+            val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+            val arr = getProfilesArray()
+            val newArr = JSONArray().apply {
+                put(obj)
+                for (i in 0 until arr.length()) put(arr.getJSONObject(i))
+            }
+            prefs.edit().putString("list", newArr.toString()).putString("active_id", newId).apply()
+            etConfigJson.setText("")
+            refreshActiveProfileHomeCard()
+            renderProfilesList()
+            Toast.makeText(this, "Profil '${obj.optString("name")}' diimpor!", Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            Toast.makeText(this, "Format JSON tidak valid!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -490,7 +1003,7 @@ class MainActivity : AppCompatActivity() {
 
                 val cb = CheckBox(this@MainActivity).apply {
                     isChecked = selected.contains(app.pkg)
-                    buttonTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#6EA8FE"))
+                    buttonTintList = ColorStateList.valueOf(Color.parseColor("#60A5FA"))
                     setOnCheckedChangeListener { _, isChecked ->
                         val cur = (prefs.getStringSet("packages", emptySet()) ?: emptySet()).toMutableSet()
                         if (isChecked) cur.add(app.pkg) else cur.remove(app.pkg)
@@ -508,174 +1021,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildCurrentJson(): JSONObject {
-        return JSONObject().apply {
-            put("dnsTypeIdx", spDnsType.selectedItemPosition)
-            put("dns", etDns.text.toString().trim())
-            put("ns", etNs.text.toString().trim())
-            put("pubkey", etPubkey.text.toString().trim())
-            put("sessions", etSessions.text.toString().trim())
-            put("sshHostPort", etSshHostPort.text.toString().trim())
-            put("user", etSshUser.text.toString().trim())
-            put("pass", etSshPass.text.toString().trim())
-            put("udpgw", etUdpgw.text.toString().trim())
-        }
-    }
-
-    private fun applyJsonConfig(obj: JSONObject) {
-        spDnsType.setSelection(obj.optInt("dnsTypeIdx", 0).coerceIn(0, dnsTypes.lastIndex))
-        etDns.setText(obj.optString("dns", "1.1.1.1"))
-        etNs.setText(obj.optString("ns", ""))
-        etPubkey.setText(obj.optString("pubkey", ""))
-        etSessions.setText(obj.optString("sessions", "1"))
-        etSshHostPort.setText(obj.optString("sshHostPort", "127.0.0.1:22"))
-        etSshUser.setText(obj.optString("user", ""))
-        etSshPass.setText(obj.optString("pass", ""))
-        etUdpgw.setText(obj.optString("udpgw", "7300"))
-        saveConfig()
-    }
-
-    private fun saveNewProfile() {
-        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
-        val arr = JSONArray(prefs.getString("list", "[]"))
-        val name = etNewProfileName.text.toString().trim().ifEmpty {
-            "S${arr.length() + 1}"
-        }
-        val item = buildCurrentJson().apply {
-            put("id", System.currentTimeMillis().toString())
-            put("name", name)
-        }
-        val newArr = JSONArray().apply {
-            put(item)
-            for (i in 0 until arr.length()) put(arr.getJSONObject(i))
-        }
-        prefs.edit().putString("list", newArr.toString()).apply()
-        etNewProfileName.setText("")
-        renderProfilesList()
-        Toast.makeText(this, "Profil '$name' disimpan!", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun renderProfilesList() {
-        profilesContainer.removeAllViews()
-        val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
-        val arr = JSONArray(prefs.getString("list", "[]"))
-        if (arr.length() == 0) {
-            val emptyTv = TextView(this).apply {
-                text = "Belum ada profil tersimpan. Isi form di Beranda lalu simpan di sini."
-                setTextColor(Color.parseColor("#6B7280"))
-                textSize = 12f
-                setPadding(8, 8, 8, 16)
-            }
-            profilesContainer.addView(emptyTv)
-            return
-        }
-
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            val id = item.optString("id")
-            val name = item.optString("name", "Profil")
-            val summary = "${item.optString("user")} @ ${item.optString("ns")} (${dnsTypes[item.optInt("dnsTypeIdx", 0)]})"
-
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setBackgroundResource(R.drawable.bg_card)
-                setPadding(32, 28, 28, 28)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = 20 }
-            }
-
-            val infoCol = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            val tvName = TextView(this).apply {
-                text = name
-                setTextColor(Color.WHITE)
-                textSize = 14f
-                setTypeface(null, Typeface.BOLD)
-            }
-            val tvSub = TextView(this).apply {
-                text = summary
-                setTextColor(Color.parseColor("#9CA3AF"))
-                textSize = 11f
-                typeface = Typeface.MONOSPACE
-            }
-            infoCol.addView(tvName)
-            infoCol.addView(tvSub)
-
-            val btnLoad = Button(this).apply {
-                text = "MUAT"
-                textSize = 11f
-                setTextColor(Color.parseColor("#6EA8FE"))
-                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1F2937"))
-                setOnClickListener {
-                    applyJsonConfig(item)
-                    switchNav("beranda")
-                    tabLayout.getTabAt(0)?.select()
-                    Toast.makeText(this@MainActivity, "Profil '$name' dimuat", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            val btnDel = Button(this).apply {
-                text = "✕"
-                textSize = 12f
-                setTextColor(Color.parseColor("#F87171"))
-                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#111827"))
-                layoutParams = LinearLayout.LayoutParams(110, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    leftMargin = 12
-                }
-                setOnClickListener {
-                    val updated = JSONArray()
-                    for (j in 0 until arr.length()) {
-                        if (arr.getJSONObject(j).optString("id") != id) updated.put(arr.getJSONObject(j))
-                    }
-                    prefs.edit().putString("list", updated.toString()).apply()
-                    renderProfilesList()
-                }
-            }
-
-            card.addView(infoCol)
-            card.addView(btnLoad)
-            card.addView(btnDel)
-            profilesContainer.addView(card)
-        }
-    }
-
-    private fun exportConfigToJson() {
-        val jsonStr = buildCurrentJson().toString(2)
-        etConfigJson.setText(jsonStr)
-        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cb.setPrimaryClip(ClipData.newPlainText("CustomTunnelConfig", jsonStr))
-        Toast.makeText(this, "Config JSON disalin ke clipboard!", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun importConfigFromJson() {
-        val raw = etConfigJson.text.toString().trim()
-        if (raw.isEmpty()) {
-            Toast.makeText(this, "Tempel JSON config dulu", Toast.LENGTH_SHORT).show()
-            return
-        }
-        try {
-            val obj = JSONObject(raw)
-            applyJsonConfig(obj)
-            switchNav("beranda")
-            tabLayout.getTabAt(0)?.select()
-            Toast.makeText(this, "Config berhasil diimpor!", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Format JSON tidak valid!", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun renderLogsNow() {
         tvLogs.text = Html.fromHtml(TunnelLogger.getHtmlLogs(), Html.FROM_HTML_MODE_LEGACY)
         scrollLog.post { scrollLog.fullScroll(View.FOCUS_DOWN) }
     }
 
     override fun onDestroy() {
-        isTrafficActive = false
+        isTrafficMonitorActive = false
         TunnelLogger.onLogUpdated = null
         uiHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
@@ -683,9 +1035,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun prepareAndStartVpn() {
         TunnelLogger.clear()
-        TunnelLogger.log("Berjalan di ${Build.MODEL} (${Build.DEVICE})", "#B0BEC5")
-        TunnelLogger.log("Android ${Build.VERSION.RELEASE} API-${Build.VERSION.SDK_INT} (${Build.SUPPORTED_ABIS.firstOrNull()})", "#B0BEC5")
-        TunnelLogger.log("Memulai Profiles...", "#81C784")
+        TunnelLogger.log("Perangkat: ${Build.MODEL} (Android ${Build.VERSION.RELEASE} / ${Build.SUPPORTED_ABIS.firstOrNull()})", "#9CA3AF")
 
         val intent = VpnService.prepare(this)
         if (intent != null) {
@@ -696,18 +1046,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTunnelService() {
-        val sessionCount = (etSessions.text.toString().trim().toIntOrNull() ?: 1).coerceIn(1, 4)
+        val active = getActiveProfile() ?: return
+        val dnsIdx = active.optInt("dnsTypeIdx", 0).coerceIn(0, dnsTypes.lastIndex)
+        val sessionCount = (active.optString("sessions", "1").toIntOrNull() ?: 1).coerceIn(1, 4)
+
         val intent = Intent(this, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_START
-            putExtra("dnsType", dnsTypes[spDnsType.selectedItemPosition])
-            putExtra("dns", etDns.text.toString().trim())
-            putExtra("ns", etNs.text.toString().trim())
-            putExtra("pubkey", etPubkey.text.toString().trim())
+            putExtra("profileName", active.optString("name", "ss"))
+            putExtra("method", active.optString("method", "SlowDNS"))
+            putExtra("dnsType", dnsTypes[dnsIdx])
+            putExtra("dns", active.optString("dns", "1.1.1.1"))
+            putExtra("ns", active.optString("ns", ""))
+            putExtra("pubkey", active.optString("pubkey", ""))
             putExtra("sessions", sessionCount)
-            putExtra("sshHostPort", etSshHostPort.text.toString().trim())
-            putExtra("user", etSshUser.text.toString().trim())
-            putExtra("pass", etSshPass.text.toString().trim())
-            putExtra("udpgw", etUdpgw.text.toString().trim())
+            putExtra("sshHostPort", active.optString("sshHostPort", "127.0.0.1:22"))
+            putExtra("user", active.optString("user", ""))
+            putExtra("pass", active.optString("pass", ""))
+            putExtra("udpgw", active.optString("udpgw", "7300"))
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
@@ -725,77 +1080,97 @@ class MainActivity : AppCompatActivity() {
                     val addrs = Collections.list(inf.inetAddresses)
                     for (addr in addrs) {
                         if (!addr.isLoopbackAddress && (addr.hostAddress?.indexOf(':') ?: -1) < 0) {
-                            tvLocalIp.text = addr.hostAddress
+                            tvLocalIp.text = "🌐 ${addr.hostAddress}"
                             return
                         }
                     }
                 }
             }
         } catch (_: Exception) {}
-        tvLocalIp.text = "192.168.42.22"
+        tvLocalIp.text = "🌐 127.0.0.1"
     }
 
     private fun updateButtonState() {
         when (TunnelVpnService.connectionState) {
             TunnelVpnService.STATE_CONNECTED -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_pause, theme))
-                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626"))
+                btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
                 btnRefresh.visibility = View.VISIBLE
                 tvHeaderStatus.text = "CONNECTED"
                 tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
-                tvStatusDotLabel.text = "● Connected (TUN Aktif)"
+                tvStatusDotLabel.text = "● Terhubung"
                 tvStatusDotLabel.setTextColor(Color.parseColor("#4ADE80"))
 
-                if (!isTrafficActive) {
-                    isTrafficActive = true
-                    startTrafficSim()
+                if (!isTrafficMonitorActive) {
+                    isTrafficMonitorActive = true
+                    startRealTrafficMonitor()
                 }
             }
             TunnelVpnService.STATE_CONNECTING -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel, theme))
-                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#D97706"))
+                btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
                 btnRefresh.visibility = View.GONE
                 tvHeaderStatus.text = "CONNECTING"
                 tvHeaderStatus.setTextColor(Color.parseColor("#FBBF24"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
-                tvStatusDotLabel.text = "● Connecting... (TUN belum aktif)"
+                tvStatusDotLabel.text = "● Menghubungkan..."
                 tvStatusDotLabel.setTextColor(Color.parseColor("#FBBF24"))
-                isTrafficActive = false
+                isTrafficMonitorActive = false
             }
             else -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_play, theme))
-                btnConnect.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#2563EB"))
+                btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2563EB"))
                 btnRefresh.visibility = View.GONE
                 tvHeaderStatus.text = "OFFLINE"
                 tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
-                tvStatusDotLabel.text = "● Start / Siap"
+                tvStatusDotLabel.text = "● Tidak aktif"
                 tvStatusDotLabel.setTextColor(Color.parseColor("#9CA3AF"))
 
-                isTrafficActive = false
+                isTrafficMonitorActive = false
                 tvStatDown.text = "0 bps"
                 tvStatUp.text = "0 bps"
-                tvStatDownPeak.text = "Puncak: 0 bps"
-                tvStatUpPeak.text = "Puncak: 0 bps"
-                maxDownPeak = 0L
-                maxUpPeak = 0L
+                tvStatDownPeak.text = "Puncak 0 bps"
+                tvStatUpPeak.text = "Puncak 0 bps"
+                maxDownPeakBps = 0L
+                maxUpPeakBps = 0L
             }
         }
     }
 
-    private fun startTrafficSim() {
+    private fun startRealTrafficMonitor() {
+        val uid = Process.myUid()
+        lastRxBytes = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
+        lastTxBytes = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
+        lastSampleTime = System.currentTimeMillis()
+
         uiHandler.post(object : Runnable {
             override fun run() {
-                if (!isTrafficActive) return
-                val curDown = (1000..950000).random().toLong()
-                val curUp = (100..250000).random().toLong()
-                if (curDown > maxDownPeak) maxDownPeak = curDown
-                if (curUp > maxUpPeak) maxUpPeak = curUp
-                tvStatDown.text = formatBps(curDown)
-                tvStatUp.text = formatBps(curUp)
-                tvStatDownPeak.text = "Puncak: ${formatBps(maxDownPeak)}"
-                tvStatUpPeak.text = "Puncak: ${formatBps(maxUpPeak)}"
+                if (!isTrafficMonitorActive) return
+                val now = System.currentTimeMillis()
+                val elapsedMs = (now - lastSampleTime).coerceAtLeast(1L)
+                val curRx = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0L)
+                val curTx = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0L)
+
+                val deltaRxBytes = (curRx - lastRxBytes).coerceAtLeast(0L)
+                val deltaTxBytes = (curTx - lastTxBytes).coerceAtLeast(0L)
+
+                val downBps = (deltaRxBytes * 8L * 1000L) / elapsedMs
+                val upBps = (deltaTxBytes * 8L * 1000L) / elapsedMs
+
+                lastRxBytes = curRx
+                lastTxBytes = curTx
+                lastSampleTime = now
+
+                if (downBps > maxDownPeakBps) maxDownPeakBps = downBps
+                if (upBps > maxUpPeakBps) maxUpPeakBps = upBps
+
+                tvStatDown.text = formatBps(downBps)
+                tvStatUp.text = formatBps(upBps)
+                tvStatDownPeak.text = "Puncak ${formatBps(maxDownPeakBps)}"
+                tvStatUpPeak.text = "Puncak ${formatBps(maxUpPeakBps)}"
+
                 uiHandler.postDelayed(this, 1000)
             }
         })
@@ -803,37 +1178,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun formatBps(bits: Long): String {
         return when {
-            bits >= 1000000 -> String.format("%.1f Mbps", bits / 1000000.0)
-            bits >= 1000 -> String.format("%.1f kbps", bits / 1000.0)
+            bits >= 1_000_000L -> String.format("%.1f Mbps", bits / 1_000_000.0)
+            bits >= 1_000L -> String.format("%.1f kbps", bits / 1_000.0)
             else -> "$bits bps"
         }
-    }
-
-    private fun saveConfig() {
-        getSharedPreferences("tunnel_cfg", MODE_PRIVATE).edit().apply {
-            putInt("dnsTypeIdx", spDnsType.selectedItemPosition)
-            putString("dns", etDns.text.toString())
-            putString("ns", etNs.text.toString())
-            putString("pubkey", etPubkey.text.toString())
-            putString("sessions", etSessions.text.toString())
-            putString("sshHostPort", etSshHostPort.text.toString())
-            putString("user", etSshUser.text.toString())
-            putString("pass", etSshPass.text.toString())
-            putString("udpgw", etUdpgw.text.toString())
-            apply()
-        }
-    }
-
-    private fun loadSavedConfig() {
-        val prefs = getSharedPreferences("tunnel_cfg", MODE_PRIVATE)
-        spDnsType.setSelection(prefs.getInt("dnsTypeIdx", 0))
-        etDns.setText(prefs.getString("dns", "1.1.1.1"))
-        etNs.setText(prefs.getString("ns", ""))
-        etPubkey.setText(prefs.getString("pubkey", ""))
-        etSessions.setText(prefs.getString("sessions", "1"))
-        etSshHostPort.setText(prefs.getString("sshHostPort", "127.0.0.1:22"))
-        etSshUser.setText(prefs.getString("user", ""))
-        etSshPass.setText(prefs.getString("pass", ""))
-        etUdpgw.setText(prefs.getString("udpgw", "7300"))
     }
 }

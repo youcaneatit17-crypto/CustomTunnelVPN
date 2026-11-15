@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0C0E12"
+    android:background="#0D1015"
     android:fitsSystemWindows="true">
 
     <LinearLayout
@@ -12,15 +12,25 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- TOP BAR BERANDA & PROFIL -->
+        <!-- TOP BAR UTAMA & PROFIL -->
         <LinearLayout
             android:id="@+id/topBarMain"
             android:layout_width="match_parent"
             android:layout_height="?android:attr/actionBarSize"
-            android:background="#15181E"
+            android:background="#141820"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="14dp">
+            android:paddingHorizontal="16dp">
+
+            <ImageButton
+                android:id="@+id/btnBackFromEditor"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="10dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_revert"
+                android:visibility="gone"
+                app:tint="#E5E7EB" />
 
             <TextView
                 android:id="@+id/tvTopTitle"
@@ -29,8 +39,8 @@
                 android:layout_weight="1"
                 android:text="Custom Tunnel"
                 android:textColor="#FB923C"
-                android:textSize="18sp"
-                android:textStyle="bold|italic" />
+                android:textSize="19sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvHeaderStatus"
@@ -44,6 +54,17 @@
                 android:textColor="#9CA3AF"
                 android:textSize="10sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnAddProfileMenu"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="+"
+                android:textColor="#F3F4F6"
+                android:textSize="26sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- TOP BAR PENGATURAN (VPN PER APLIKASI) -->
@@ -51,7 +72,7 @@
             android:id="@+id/topBarSettings"
             android:layout_width="match_parent"
             android:layout_height="?android:attr/actionBarSize"
-            android:background="#15181E"
+            android:background="#141820"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="12dp"
@@ -81,8 +102,8 @@
                 android:layout_height="40dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
-                android:text="+"
                 android:rotation="45"
+                android:text="+"
                 android:textColor="#E2E8F0"
                 android:textSize="24sp" />
         </LinearLayout>
@@ -92,10 +113,10 @@
             android:id="@+id/tabLayout"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:background="#15181E"
-            app:tabIndicatorColor="#3B82F6"
+            android:background="#141820"
+            app:tabIndicatorColor="#60A5FA"
             app:tabIndicatorHeight="2.5dp"
-            app:tabSelectedTextColor="#3B82F6"
+            app:tabSelectedTextColor="#60A5FA"
             app:tabTextAppearance="@android:style/TextAppearance.Small"
             app:tabTextColor="#9CA3AF">
 
@@ -116,40 +137,60 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- BERANDA: UTAMA -->
+            <!-- 1. BERANDA: UTAMA (CLEAN & SIMPEL) -->
             <ScrollView
                 android:id="@+id/layoutUtama"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:padding="12dp">
+                android:padding="14dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingBottom="76dp">
+                    android:paddingBottom="84dp">
 
-                    <!-- TRAFFIC CARD -->
+                    <!-- KARTU TRAFIK LIVE -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="14dp"
                         android:background="@drawable/bg_card"
                         android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="📊 Trafik"
-                            android:textColor="#9CA3AF"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
+                        android:padding="16dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="📈  Trafik"
+                                android:textColor="#E5E7EB"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvActiveProtocolBadge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:paddingHorizontal="8dp"
+                                android:paddingVertical="3dp"
+                                android:text="SSH • SlowDNS"
+                                android:textColor="#60A5FA"
+                                android:textSize="10.5sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
                             android:orientation="horizontal">
 
                             <LinearLayout
@@ -162,26 +203,28 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="↓ Unduh"
-                                    android:textColor="#4ADE80"
-                                    android:textSize="11sp" />
+                                    android:textColor="#FBBF24"
+                                    android:textSize="12sp" />
 
                                 <TextView
                                     android:id="@+id/tvStatDown"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
                                     android:fontFamily="monospace"
                                     android:text="0 bps"
                                     android:textColor="#FFFFFF"
-                                    android:textSize="15sp"
+                                    android:textSize="18sp"
                                     android:textStyle="bold" />
 
                                 <TextView
                                     android:id="@+id/tvStatDownPeak"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="Puncak: 0 bps"
-                                    android:textColor="#6B7280"
-                                    android:textSize="10sp" />
+                                    android:layout_marginTop="2dp"
+                                    android:text="Puncak 0 bps"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
                             </LinearLayout>
 
                             <LinearLayout
@@ -195,34 +238,37 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="↑ Unggah"
-                                    android:textColor="#6EA8FE"
-                                    android:textSize="11sp" />
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="12sp" />
 
                                 <TextView
                                     android:id="@+id/tvStatUp"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
                                     android:fontFamily="monospace"
                                     android:text="0 bps"
                                     android:textColor="#FFFFFF"
-                                    android:textSize="15sp"
+                                    android:textSize="18sp"
                                     android:textStyle="bold" />
 
                                 <TextView
                                     android:id="@+id/tvStatUpPeak"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="Puncak: 0 bps"
-                                    android:textColor="#6B7280"
-                                    android:textSize="10sp" />
+                                    android:layout_marginTop="2dp"
+                                    android:text="Puncak 0 bps"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
                             </LinearLayout>
                         </LinearLayout>
 
+                        <!-- STATUS PILL TENGAH -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="14dp"
-                            android:gravity="center_vertical"
+                            android:gravity="center"
                             android:orientation="horizontal">
 
                             <TextView
@@ -230,36 +276,54 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:background="@drawable/bg_input"
-                                android:paddingHorizontal="10dp"
-                                android:paddingVertical="4dp"
+                                android:paddingHorizontal="14dp"
+                                android:paddingVertical="5dp"
                                 android:text="● Tidak aktif"
                                 android:textColor="#9CA3AF"
-                                android:textSize="11sp" />
+                                android:textSize="11.5sp" />
+                        </LinearLayout>
 
-                            <View
-                                android:layout_width="0dp"
-                                android:layout_height="1dp"
-                                android:layout_weight="1" />
+                        <!-- IP LOKAL / INTERFACE -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:gravity="end|center_vertical"
+                            android:orientation="horizontal">
 
                             <TextView
                                 android:id="@+id/tvLocalIp"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:fontFamily="monospace"
-                                android:text="192.168.42.22"
+                                android:text="🌐 192.168.42.22"
                                 android:textColor="#9CA3AF"
-                                android:textSize="11sp" />
+                                android:textSize="11.5sp" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- KONEKSI UTAMA & REFRESH -->
+                    <!-- KARTU KONEKSI UTAMA (PROFIL AKTIF) -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="14dp"
                         android:background="@drawable/bg_card"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Koneksi utama"
+                            android:textColor="#F3F4F6"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginVertical="10dp"
+                            android:background="#232936" />
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -267,226 +331,135 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
-                            <TextView
-                                android:id="@+id/tvSplitSummaryHome"
+                            <LinearLayout
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="VPN per aplikasi: Semua aplikasi"
-                                android:textColor="#9CA3AF"
-                                android:textSize="12sp" />
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:id="@+id/tvHomeProfileName"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Default"
+                                    android:textColor="#E5E7EB"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvHomeProfileSub"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:fontFamily="monospace"
+                                    android:text="Belum ada server diatur"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
 
                             <Button
-                                android:id="@+id/btnLihatSplit"
+                                android:id="@+id/btnHomePickProfile"
                                 android:layout_width="wrap_content"
-                                android:layout_height="36dp"
-                                android:backgroundTint="#1F2937"
-                                android:text="Atur"
-                                android:textColor="#6EA8FE"
-                                android:textSize="11sp" />
+                                android:layout_height="38dp"
+                                android:layout_marginEnd="6dp"
+                                android:backgroundTint="#1E2532"
+                                android:text="✓ Profil"
+                                android:textAllCaps="false"
+                                android:textColor="#E5E7EB"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/btnHomeEditProfile"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="?android:attr/selectableItemBackground"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="8dp"
+                                android:text="Lihat"
+                                android:textColor="#60A5FA"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
                         </LinearLayout>
 
                         <Button
                             android:id="@+id/btnRefresh"
                             android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginTop="8dp"
+                            android:layout_height="42dp"
+                            android:layout_marginTop="12dp"
                             android:backgroundTint="#0284C7"
-                            android:text="REFRESH JALUR (ANTI-LEMOT)"
+                            android:text="REFRESH SESI SSH"
                             android:textColor="#FFFFFF"
                             android:textSize="12sp"
                             android:textStyle="bold"
                             android:visibility="gone" />
                     </LinearLayout>
 
-                    <!-- KONFIGURASI SLOWDNS -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:background="@drawable/bg_card"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="10dp"
-                            android:text="👤 SlowDNS"
-                            android:textColor="#34D399"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
-
-                        <Spinner
-                            android:id="@+id/spDnsType"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginBottom="8dp"
-                            android:background="@drawable/bg_input"
-                            android:paddingHorizontal="12dp" />
-
-                        <EditText
-                            android:id="@+id/etDns"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginBottom="8dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="DNS Resolver (1.1.1.1)"
-                            android:paddingHorizontal="12dp"
-                            android:singleLine="true"
-                            android:textColor="#F3F4F6"
-                            android:textColorHint="#6B7280"
-                            android:textSize="13sp" />
-
-                        <EditText
-                            android:id="@+id/etNs"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginBottom="8dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="NS (Nameserver)"
-                            android:paddingHorizontal="12dp"
-                            android:singleLine="true"
-                            android:textColor="#F3F4F6"
-                            android:textColorHint="#6B7280"
-                            android:textSize="13sp" />
-
-                        <EditText
-                            android:id="@+id/etPubkey"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="Public Key (64-char Hex)"
-                            android:minHeight="44dp"
-                            android:paddingHorizontal="12dp"
-                            android:paddingVertical="10dp"
-                            android:textColor="#FCD34D"
-                            android:textColorHint="#6B7280"
-                            android:textSize="12sp" />
-
-                        <EditText
-                            android:id="@+id/etSessions"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="Jumlah Sesi (1 - 4)"
-                            android:inputType="number"
-                            android:paddingHorizontal="12dp"
-                            android:singleLine="true"
-                            android:textColor="#F3F4F6"
-                            android:textColorHint="#6B7280"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <!-- AKUN SSH -->
+                    <!-- KARTU SPLIT TUNNEL RINGKAS -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bg_card"
-                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
                         android:padding="14dp">
 
                         <TextView
+                            android:id="@+id/tvSplitSummaryHome"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="VPN per aplikasi: Semua aplikasi"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+
+                        <TextView
+                            android:id="@+id/btnLihatSplit"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="10dp"
-                            android:text="🔑 Akun SSH &amp; BadVPN"
-                            android:textColor="#6EA8FE"
-                            android:textSize="12sp"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="6dp"
+                            android:text="Atur"
+                            android:textColor="#60A5FA"
+                            android:textSize="13sp"
                             android:textStyle="bold" />
-
-                        <EditText
-                            android:id="@+id/etSshHostPort"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginBottom="8dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="Host:Port SSH (127.0.0.1:22)"
-                            android:paddingHorizontal="12dp"
-                            android:singleLine="true"
-                            android:textColor="#F3F4F6"
-                            android:textColorHint="#6B7280"
-                            android:textSize="13sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:orientation="horizontal">
-
-                            <EditText
-                                android:id="@+id/etSshUser"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginEnd="6dp"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_input"
-                                android:fontFamily="monospace"
-                                android:hint="Username"
-                                android:paddingHorizontal="12dp"
-                                android:singleLine="true"
-                                android:textColor="#F3F4F6"
-                                android:textColorHint="#6B7280"
-                                android:textSize="13sp" />
-
-                            <EditText
-                                android:id="@+id/etSshPass"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginStart="6dp"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_input"
-                                android:fontFamily="monospace"
-                                android:hint="Password"
-                                android:inputType="textPassword"
-                                android:paddingHorizontal="12dp"
-                                android:singleLine="true"
-                                android:textColor="#F3F4F6"
-                                android:textColorHint="#6B7280"
-                                android:textSize="13sp" />
-                        </LinearLayout>
-
-                        <EditText
-                            android:id="@+id/etUdpgw"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:background="@drawable/bg_input"
-                            android:fontFamily="monospace"
-                            android:hint="BadVPN UDPGW Port (7300)"
-                            android:inputType="number"
-                            android:paddingHorizontal="12dp"
-                            android:singleLine="true"
-                            android:textColor="#F3F4F6"
-                            android:textColorHint="#6B7280"
-                            android:textSize="13sp" />
                     </LinearLayout>
                 </LinearLayout>
             </ScrollView>
 
-            <!-- BERANDA: LOG -->
+            <!-- 2. BERANDA: LOG (AUTO-CLEAN 100 BARIS) -->
             <LinearLayout
                 android:id="@+id/layoutLog"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="10dp"
+                android:padding="12dp"
                 android:visibility="gone">
 
-                <Button
-                    android:id="@+id/btnCleanLog"
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
                     android:layout_marginBottom="8dp"
-                    android:backgroundTint="#1F2937"
-                    android:text="BERSIHKAN LOG"
-                    android:textColor="#E5E7EB"
-                    android:textSize="12sp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Auto-clean maksimal 100 baris"
+                        android:textColor="#6B7280"
+                        android:textSize="11sp" />
+
+                    <Button
+                        android:id="@+id/btnCleanLog"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:backgroundTint="#1E2532"
+                        android:text="BERSIHKAN LOG"
+                        android:textColor="#E5E7EB"
+                        android:textSize="11sp" />
+                </LinearLayout>
 
                 <ScrollView
                     android:id="@+id/scrollLog"
@@ -507,86 +480,31 @@
                 </ScrollView>
             </LinearLayout>
 
-            <!-- VIEW PROFIL -->
+            <!-- 3. PROFIL: DAFTAR PROFIL -->
             <ScrollView
                 android:id="@+id/layoutProfil"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:padding="12dp"
+                android:padding="14dp"
                 android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingBottom="24dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:background="@drawable/bg_card"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="📂 Profil"
-                            android:textColor="#FFFFFF"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:layout_marginBottom="12dp"
-                            android:text="Simpan akun SlowDNS + SSH saat ini ke profil lokal."
-                            android:textColor="#9CA3AF"
-                            android:textSize="11sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <EditText
-                                android:id="@+id/etNewProfileName"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_marginEnd="8dp"
-                                android:layout_weight="1"
-                                android:background="@drawable/bg_input"
-                                android:hint="Nama profil (misal: S1)"
-                                android:paddingHorizontal="12dp"
-                                android:singleLine="true"
-                                android:textColor="#F3F4F6"
-                                android:textColorHint="#6B7280"
-                                android:textSize="13sp" />
-
-                            <Button
-                                android:id="@+id/btnSaveProfile"
-                                android:layout_width="wrap_content"
-                                android:layout_height="44dp"
-                                android:backgroundTint="#3B82F6"
-                                android:text="SIMPAN"
-                                android:textColor="#FFFFFF"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
-                        </LinearLayout>
-                    </LinearLayout>
+                    android:paddingBottom="84dp">
 
                     <LinearLayout
                         android:id="@+id/profilesContainer"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
                         android:orientation="vertical" />
 
+                    <!-- EKSPOR / IMPOR JSON -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
                         android:background="@drawable/bg_card"
                         android:orientation="vertical"
                         android:padding="14dp">
@@ -594,21 +512,21 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="10dp"
-                            android:text="EKSPOR / IMPOR CONFIG JSON"
-                            android:textColor="#FBBF24"
+                            android:layout_marginBottom="8dp"
+                            android:text="BACKUP / IMPOR CONFIG JSON"
+                            android:textColor="#9CA3AF"
                             android:textSize="11sp"
                             android:textStyle="bold" />
 
                         <EditText
                             android:id="@+id/etConfigJson"
                             android:layout_width="match_parent"
-                            android:layout_height="80dp"
+                            android:layout_height="72dp"
                             android:layout_marginBottom="8dp"
                             android:background="@drawable/bg_input"
                             android:fontFamily="monospace"
                             android:gravity="top|start"
-                            android:hint="Tempel JSON config di sini untuk impor..."
+                            android:hint="Tempel JSON profil di sini..."
                             android:padding="10dp"
                             android:textColor="#D1D5DB"
                             android:textColorHint="#6B7280"
@@ -622,22 +540,22 @@
                             <Button
                                 android:id="@+id/btnExportJson"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="40dp"
                                 android:layout_marginEnd="6dp"
                                 android:layout_weight="1"
-                                android:backgroundTint="#1F2937"
-                                android:text="SALIN CONFIG"
+                                android:backgroundTint="#1E2532"
+                                android:text="SALIN JSON"
                                 android:textColor="#E5E7EB"
                                 android:textSize="11sp" />
 
                             <Button
                                 android:id="@+id/btnImportJson"
                                 android:layout_width="0dp"
-                                android:layout_height="42dp"
+                                android:layout_height="40dp"
                                 android:layout_marginStart="6dp"
                                 android:layout_weight="1"
                                 android:backgroundTint="#059669"
-                                android:text="IMPOR CONFIG"
+                                android:text="IMPOR PROFIL"
                                 android:textColor="#FFFFFF"
                                 android:textSize="11sp" />
                         </LinearLayout>
@@ -645,7 +563,448 @@
                 </LinearLayout>
             </ScrollView>
 
-            <!-- VIEW PENGATURAN: VPN PER APLIKASI -->
+            <!-- 4. PROFIL: EDITOR MODULAR COLLAPSIBLE -->
+            <ScrollView
+                android:id="@+id/layoutProfileEditor"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="14dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="88dp">
+
+                    <!-- KARTU NAMA PROFIL -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="10dp"
+                            android:text="📄"
+                            android:textSize="16sp" />
+
+                        <EditText
+                            android:id="@+id/etEditProfileName"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:background="@android:color/transparent"
+                            android:hint="Nama Profil (misal: ss)"
+                            android:singleLine="true"
+                            android:textColor="#FFFFFF"
+                            android:textColorHint="#6B7280"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- KARTU MODE -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <LinearLayout
+                            android:id="@+id/hdrCardMode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="🎛️  Mode"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/arrowCardMode"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="⌃"
+                                android:textColor="#9CA3AF"
+                                android:textSize="16sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/bodyCardMode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btnModeSingle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="38dp"
+                                android:layout_marginEnd="8dp"
+                                android:backgroundTint="#2C3545"
+                                android:text="Standard (1 Sesi)"
+                                android:textAllCaps="false"
+                                android:textColor="#FFFFFF"
+                                android:textSize="12sp" />
+
+                            <Button
+                                android:id="@+id/btnModeMulti"
+                                android:layout_width="wrap_content"
+                                android:layout_height="38dp"
+                                android:backgroundTint="#161B24"
+                                android:text="Multi-Sesi (2x)"
+                                android:textAllCaps="false"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- KARTU METODE -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <LinearLayout
+                            android:id="@+id/hdrCardMethod"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="⚡  Metode"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/arrowCardMethod"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="⌃"
+                                android:textColor="#9CA3AF"
+                                android:textSize="16sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/bodyCardMethod"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btnMethodSlowDns"
+                                android:layout_width="wrap_content"
+                                android:layout_height="38dp"
+                                android:layout_marginEnd="8dp"
+                                android:backgroundTint="#2C3545"
+                                android:text="SlowDNS"
+                                android:textAllCaps="false"
+                                android:textColor="#FFFFFF"
+                                android:textSize="12sp" />
+
+                            <Button
+                                android:id="@+id/btnMethodDirect"
+                                android:layout_width="wrap_content"
+                                android:layout_height="38dp"
+                                android:backgroundTint="#161B24"
+                                android:text="Direct SSH"
+                                android:textAllCaps="false"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- KARTU SLOWDNS (MUNCUL SAAT METODE = SLOWDNS) -->
+                    <LinearLayout
+                        android:id="@+id/cardSlowDnsSection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <LinearLayout
+                            android:id="@+id/hdrCardSlowDns"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="👤  SlowDNS"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/arrowCardSlowDns"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="⌃"
+                                android:textColor="#9CA3AF"
+                                android:textSize="16sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/bodyCardSlowDns"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="Type"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <Spinner
+                                android:id="@+id/spDnsType"
+                                android:layout_width="match_parent"
+                                android:layout_height="46dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/bg_input"
+                                android:paddingHorizontal="12dp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="DNS (Domain Name System)"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etDns"
+                                android:layout_width="match_parent"
+                                android:layout_height="46dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:hint="1.1.1.1"
+                                android:paddingHorizontal="12dp"
+                                android:singleLine="true"
+                                android:textColor="#F3F4F6"
+                                android:textColorHint="#6B7280"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="NS (Nameserver)"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etNs"
+                                android:layout_width="match_parent"
+                                android:layout_height="46dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:hint="ns.domain.com"
+                                android:paddingHorizontal="12dp"
+                                android:singleLine="true"
+                                android:textColor="#F3F4F6"
+                                android:textColorHint="#6B7280"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="Kunci publik"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etPubkey"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:hint="64-char hex public key"
+                                android:minHeight="46dp"
+                                android:paddingHorizontal="12dp"
+                                android:paddingVertical="10dp"
+                                android:textColor="#FCD34D"
+                                android:textColorHint="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- KARTU AKUN SSH & BADVPN -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <LinearLayout
+                            android:id="@+id/hdrCardSsh"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="🔑  Akun SSH &amp; UDPGW"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/arrowCardSsh"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="⌃"
+                                android:textColor="#9CA3AF"
+                                android:textSize="16sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/bodyCardSsh"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="Host:Port SSH"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etSshHostPort"
+                                android:layout_width="match_parent"
+                                android:layout_height="46dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:hint="127.0.0.1:22"
+                                android:paddingHorizontal="12dp"
+                                android:singleLine="true"
+                                android:textColor="#F3F4F6"
+                                android:textColorHint="#6B7280"
+                                android:textSize="13sp" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:orientation="horizontal">
+
+                                <EditText
+                                    android:id="@+id/etSshUser"
+                                    android:layout_width="0dp"
+                                    android:layout_height="46dp"
+                                    android:layout_marginEnd="6dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="Username"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <EditText
+                                    android:id="@+id/etSshPass"
+                                    android:layout_width="0dp"
+                                    android:layout_height="46dp"
+                                    android:layout_marginStart="6dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="Password"
+                                    android:inputType="textPassword"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+
+                                <EditText
+                                    android:id="@+id/etSessions"
+                                    android:layout_width="0dp"
+                                    android:layout_height="46dp"
+                                    android:layout_marginEnd="6dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="Sesi (1-4)"
+                                    android:inputType="number"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <EditText
+                                    android:id="@+id/etUdpgw"
+                                    android:layout_width="0dp"
+                                    android:layout_height="46dp"
+                                    android:layout_marginStart="6dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="UDPGW (7300)"
+                                    android:inputType="number"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- 5. PENGATURAN: VPN PER APLIKASI -->
             <LinearLayout
                 android:id="@+id/layoutPengaturan"
                 android:layout_width="match_parent"
@@ -662,7 +1021,6 @@
                     android:textColor="#9CA3AF"
                     android:textSize="11.5sp" />
 
-                <!-- PILIH MODE (KLIK UNTUK DIALOG) -->
                 <LinearLayout
                     android:id="@+id/btnSelectSplitMode"
                     android:layout_width="match_parent"
@@ -708,7 +1066,6 @@
                     android:textSize="12.5sp"
                     android:textStyle="bold" />
 
-                <!-- FILTER CHIPS: APLIKASI PENGGUNA / SEMUA APLIKASI -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -737,7 +1094,6 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <!-- SEARCH BAR -->
                 <EditText
                     android:id="@+id/etSearchApps"
                     android:layout_width="match_parent"
@@ -754,7 +1110,6 @@
                     android:textColorHint="#6B7280"
                     android:textSize="13sp" />
 
-                <!-- LIST APLIKASI TERPASANG -->
                 <ListView
                     android:id="@+id/lvInstalledApps"
                     android:layout_width="match_parent"
@@ -769,7 +1124,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:background="#15181E"
+            android:background="#141820"
             android:orientation="horizontal"
             android:paddingVertical="4dp">
 
@@ -855,15 +1210,28 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- FLOATING ACTION BUTTON (CONNECT) -->
+    <!-- FAB CONNECT / DISCONNECT (BERANDA) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnConnect"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end|bottom"
-        android:layout_marginEnd="16dp"
+        android:layout_marginEnd="18dp"
         android:layout_marginBottom="72dp"
         android:src="@android:drawable/ic_media_play"
         app:backgroundTint="#1D4ED8"
+        app:tint="#FFFFFF" />
+
+    <!-- FAB SIMPAN PROFIL (EDITOR PROFIL) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnSaveEditorFab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="72dp"
+        android:src="@android:drawable/ic_menu_save"
+        android:visibility="gone"
+        app:backgroundTint="#2563EB"
         app:tint="#FFFFFF" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
