@@ -59,9 +59,16 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnModeSingle: Button
     private lateinit var btnModeMulti: Button
+    private lateinit var btnMethodPayload: Button
+    private lateinit var btnMethodTls: Button
     private lateinit var btnMethodSlowDns: Button
     private lateinit var btnMethodDirect: Button
+    private lateinit var cardPayloadSection: LinearLayout
+    private lateinit var cardTlsSection: LinearLayout
     private lateinit var cardSlowDnsSection: LinearLayout
+    private lateinit var etCustomPayload: EditText
+    private lateinit var etRemoteProxy: EditText
+    private lateinit var etTlsSni: EditText
 
     private lateinit var btnConnect: FloatingActionButton
     private lateinit var btnSaveEditorFab: FloatingActionButton
@@ -153,6 +160,9 @@ class MainActivity : AppCompatActivity() {
     private var editingProfileId: String? = null
     private var editorProtocol = "SSH"
     private var editorMethod = "SlowDNS"
+    private var usePayloadFlag = false
+    private var useTlsFlag = false
+    private var useSlowDnsFlag = true
 
     private var isTrafficMonitorActive = false
     private var lastRxBytes = 0L
@@ -230,12 +240,30 @@ class MainActivity : AppCompatActivity() {
             etSessions.setText("2")
             updateEditorChips()
         }
+        btnMethodPayload.setOnClickListener {
+            usePayloadFlag = !usePayloadFlag
+            if (usePayloadFlag) useSlowDnsFlag = false
+            syncEditorMethodString()
+            updateEditorChips()
+        }
+        btnMethodTls.setOnClickListener {
+            useTlsFlag = !useTlsFlag
+            if (useTlsFlag) useSlowDnsFlag = false
+            syncEditorMethodString()
+            updateEditorChips()
+        }
         btnMethodSlowDns.setOnClickListener {
-            editorMethod = "SlowDNS"
+            useSlowDnsFlag = true
+            usePayloadFlag = false
+            useTlsFlag = false
+            syncEditorMethodString()
             updateEditorChips()
         }
         btnMethodDirect.setOnClickListener {
-            editorMethod = "Direct"
+            useSlowDnsFlag = false
+            usePayloadFlag = false
+            useTlsFlag = false
+            syncEditorMethodString()
             updateEditorChips()
         }
 
@@ -313,9 +341,16 @@ class MainActivity : AppCompatActivity() {
 
         btnModeSingle = findViewById(R.id.btnModeSingle)
         btnModeMulti = findViewById(R.id.btnModeMulti)
+        btnMethodPayload = findViewById(R.id.btnMethodPayload)
+        btnMethodTls = findViewById(R.id.btnMethodTls)
         btnMethodSlowDns = findViewById(R.id.btnMethodSlowDns)
         btnMethodDirect = findViewById(R.id.btnMethodDirect)
+        cardPayloadSection = findViewById(R.id.cardPayloadSection)
+        cardTlsSection = findViewById(R.id.cardTlsSection)
         cardSlowDnsSection = findViewById(R.id.cardSlowDnsSection)
+        etCustomPayload = findViewById(R.id.etCustomPayload)
+        etRemoteProxy = findViewById(R.id.etRemoteProxy)
+        etTlsSni = findViewById(R.id.etTlsSni)
 
         btnConnect = findViewById(R.id.btnConnect)
         btnSaveEditorFab = findViewById(R.id.btnSaveEditorFab)
@@ -664,6 +699,7 @@ class MainActivity : AppCompatActivity() {
         val pairs = listOf(
             Triple(R.id.hdrCardMode, R.id.bodyCardMode, R.id.arrowCardMode),
             Triple(R.id.hdrCardMethod, R.id.bodyCardMethod, R.id.arrowCardMethod),
+            Triple(R.id.hdrCardPayload, R.id.bodyCardPayload, R.id.arrowCardPayload),
             Triple(R.id.hdrCardSlowDns, R.id.bodyCardSlowDns, R.id.arrowCardSlowDns),
             Triple(R.id.hdrCardSsh, R.id.bodyCardSsh, R.id.arrowCardSsh)
         )
@@ -844,7 +880,13 @@ class MainActivity : AppCompatActivity() {
             editingProfileId = null
             val list = getProfilesArray()
             etEditProfileName.setText("ss${list.length() + 1}")
-            editorMethod = "SlowDNS"
+            usePayloadFlag = false
+            useTlsFlag = false
+            useSlowDnsFlag = true
+            syncEditorMethodString()
+            etCustomPayload.setText("")
+            etRemoteProxy.setText("")
+            etTlsSni.setText("")
             spDnsType.setSelection(0)
             etDns.setText("1.1.1.1")
             etNs.setText("")
@@ -857,7 +899,14 @@ class MainActivity : AppCompatActivity() {
         } else {
             editingProfileId = profile.optString("id")
             etEditProfileName.setText(profile.optString("name", "ss"))
-            editorMethod = profile.optString("method", "SlowDNS")
+            val savedMethod = profile.optString("method", "SlowDNS")
+            usePayloadFlag = savedMethod.contains("Payload", ignoreCase = true)
+            useTlsFlag = savedMethod.contains("TLS", ignoreCase = true)
+            useSlowDnsFlag = savedMethod.contains("SlowDNS", ignoreCase = true)
+            syncEditorMethodString()
+            etCustomPayload.setText(profile.optString("payload", ""))
+            etRemoteProxy.setText(profile.optString("proxy", ""))
+            etTlsSni.setText(profile.optString("sni", ""))
             spDnsType.setSelection(profile.optInt("dnsTypeIdx", 0).coerceIn(0, dnsTypes.lastIndex))
             etDns.setText(profile.optString("dns", "1.1.1.1"))
             etNs.setText(profile.optString("ns", ""))
@@ -886,19 +935,28 @@ class MainActivity : AppCompatActivity() {
             btnModeSingle.setTextColor(Color.parseColor("#9CA3AF"))
         }
 
-        if (editorMethod == "SlowDNS") {
-            btnMethodSlowDns.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
-            btnMethodSlowDns.setTextColor(Color.WHITE)
-            btnMethodDirect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
-            btnMethodDirect.setTextColor(Color.parseColor("#9CA3AF"))
-            cardSlowDnsSection.visibility = View.VISIBLE
-        } else {
-            btnMethodDirect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
-            btnMethodDirect.setTextColor(Color.WHITE)
-            btnMethodSlowDns.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#161B24"))
-            btnMethodSlowDns.setTextColor(Color.parseColor("#9CA3AF"))
-            cardSlowDnsSection.visibility = View.GONE
+        fun styleChip(btn: Button, active: Boolean) {
+            btn.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (active) "#2C3545" else "#161B24"))
+            btn.setTextColor(if (active) Color.WHITE else Color.parseColor("#9CA3AF"))
         }
+
+        val isDirect = !usePayloadFlag && !useTlsFlag && !useSlowDnsFlag
+        styleChip(btnMethodPayload, usePayloadFlag)
+        styleChip(btnMethodTls, useTlsFlag)
+        styleChip(btnMethodSlowDns, useSlowDnsFlag)
+        styleChip(btnMethodDirect, isDirect)
+
+        cardPayloadSection.visibility = if (usePayloadFlag) View.VISIBLE else View.GONE
+        cardTlsSection.visibility = if (useTlsFlag) View.VISIBLE else View.GONE
+        cardSlowDnsSection.visibility = if (useSlowDnsFlag) View.VISIBLE else View.GONE
+    }
+
+    private fun syncEditorMethodString() {
+        val parts = mutableListOf<String>()
+        if (usePayloadFlag) parts.add("Payload")
+        if (useTlsFlag) parts.add("TLS")
+        if (useSlowDnsFlag) parts.add("SlowDNS")
+        editorMethod = if (parts.isEmpty()) "Direct" else parts.joinToString(" + ")
     }
 
     private fun saveEditorProfile() {
@@ -912,6 +970,9 @@ class MainActivity : AppCompatActivity() {
             put("protocol", editorProtocol)
             put("name", name)
             put("method", editorMethod)
+            put("payload", etCustomPayload.text.toString())
+            put("proxy", etRemoteProxy.text.toString().trim())
+            put("sni", etTlsSni.text.toString().trim())
             put("dnsTypeIdx", spDnsType.selectedItemPosition)
             put("dns", etDns.text.toString().trim().ifEmpty { "1.1.1.1" })
             put("ns", etNs.text.toString().trim())
@@ -1012,10 +1073,10 @@ class MainActivity : AppCompatActivity() {
         val name = active.optString("name", "ss")
         val proto = active.optString("protocol", "SSH")
         val method = active.optString("method", "SlowDNS")
-        val hostInfo = if (method == "SlowDNS") {
-            active.optString("ns", "").ifEmpty { active.optString("sshHostPort", "") }
-        } else {
-            active.optString("sshHostPort", "")
+        val hostInfo = when {
+            method.contains("SlowDNS", ignoreCase = true) -> active.optString("ns", "").ifEmpty { active.optString("sshHostPort", "") }
+            active.optString("proxy", "").isNotEmpty() -> active.optString("proxy", "")
+            else -> active.optString("sshHostPort", "")
         }
         tvHomeProfileName.text = name
         tvHomeProfileSub.text = "$proto • $method ($hostInfo)"
@@ -1383,6 +1444,9 @@ class MainActivity : AppCompatActivity() {
             action = TunnelVpnService.ACTION_START
             putExtra("profileName", active.optString("name", "ss"))
             putExtra("method", active.optString("method", "SlowDNS"))
+            putExtra("payload", active.optString("payload", ""))
+            putExtra("proxy", active.optString("proxy", ""))
+            putExtra("sni", active.optString("sni", ""))
             putExtra("dnsType", dnsTypes[dnsIdx])
             putExtra("dns", active.optString("dns", "1.1.1.1"))
             putExtra("ns", active.optString("ns", ""))

@@ -41,6 +41,9 @@ class TunnelVpnService : VpnService() {
     private data class TunnelConfig(
         val profileName: String,
         val method: String,
+        val payload: String,
+        val proxy: String,
+        val sni: String,
         val dnsType: String,
         val dns: String,
         val ns: String,
@@ -85,13 +88,19 @@ class TunnelVpnService : VpnService() {
         val defaultUdpgw = appPrefs.getString("default_udpgw", "7300") ?: "7300"
 
         val method = intent?.getStringExtra("method") ?: "SlowDNS"
+        val useSlowDns = method.contains("SlowDNS", ignoreCase = true)
+        val usePayload = method.contains("Payload", ignoreCase = true)
+        val useTls = method.contains("TLS", ignoreCase = true)
         val config = TunnelConfig(
             profileName = intent?.getStringExtra("profileName") ?: "Default",
             method = method,
+            payload = if (usePayload) (intent?.getStringExtra("payload") ?: "") else "",
+            proxy = if (usePayload) (intent?.getStringExtra("proxy") ?: "") else "",
+            sni = if (useTls) (intent?.getStringExtra("sni") ?: "") else "",
             dnsType = intent?.getStringExtra("dnsType") ?: "NULL",
             dns = intent?.getStringExtra("dns") ?: "1.1.1.1",
-            ns = if (method == "SlowDNS") (intent?.getStringExtra("ns") ?: "") else "",
-            pubkey = if (method == "SlowDNS") (intent?.getStringExtra("pubkey") ?: "") else "",
+            ns = if (useSlowDns) (intent?.getStringExtra("ns") ?: "") else "",
+            pubkey = if (useSlowDns) (intent?.getStringExtra("pubkey") ?: "") else "",
             sshHostPort = intent?.getStringExtra("sshHostPort") ?: "127.0.0.1:22",
             user = intent?.getStringExtra("user") ?: "",
             pass = intent?.getStringExtra("pass") ?: "",
@@ -196,6 +205,9 @@ class TunnelVpnService : VpnService() {
                 "-type", config.dnsType,
                 "-ns", config.ns,
                 "-pubkey", config.pubkey,
+                "-payload", config.payload,
+                "-proxy", config.proxy,
+                "-sni", config.sni,
                 "-ssh", config.sshHostPort,
                 "-user", config.user,
                 "-pass", config.pass,

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"crypto/tls"
+	"encoding/base64"
 	"net"
 	"os"
 	"os/exec"
@@ -816,6 +818,106 @@ func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, d
 }
 
 var keepaliveSec = flag.Int("keepalive", 3, "ssh keepalive interval seconds")
+
+var customPayload = flag.String("payload", "", "custom HTTP payload")
+var remoteProxy = flag.String("proxy", "", "remote proxy host:port or user:pass@host:port")
+var sniHost = flag.String("sni", "", "TLS SNI hostname")
+
+
+func renderPayloadString(raw, sshAddr string) string {
+	host, port, err := net.SplitHostPort(sshAddr)
+	if err != nil {
+		host = sshAddr
+		port = "22"
+	}
+	p := raw
+	p = strings.ReplaceAll(p, "[crlf]", "\r\n")
+	p = strings.ReplaceAll(p, "[lf]", "\n")
+	p = strings.ReplaceAll(p, "[cr]", "\r")
+	p = strings.ReplaceAll(p, "[host_port]", net.JoinHostPort(host, port))
+	p = strings.ReplaceAll(p, "[ssh]", net.JoinHostPort(host, port))
+	p = strings.ReplaceAll(p, "[host]", host)
+	p = strings.ReplaceAll(p, "[port]", port)
+	p = strings.ReplaceAll(p, "[protocol]", "HTTP/1.1")
+	p = strings.ReplaceAll(p, "[ua]", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36")
+	return p
+}
+
+func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout time.Duration) (net.Conn, error) {
+	dialTarget := sshAddr
+	var proxyAuth string
+
+	if strings.TrimSpace(proxyStr) != "" {
+		px := strings.TrimSpace(proxyStr)
+		if atIdx := strings.LastIndex(px, "@"); atIdx != -1 {
+			proxyAuth = px[:atIdx]
+			px = px[atIdx+1:]
+		}
+		if !strings.Contains(px, ":") {
+			px = net.JoinHostPort(px, "80")
+		}
+		dialTarget = px
+	}
+
+	rawConn, err := net.DialTimeout("tcp", dialTarget, timeout)
+	if err != nil {
+		return nil, fmt.Errorf("gagal koneksi ke %s: %w", dialTarget, err)
+	}
+	if tc, ok := rawConn.(*net.TCPConn); ok {
+		_ = tc.SetNoDelay(true)
+	}
+
+	var conn net.Conn = rawConn
+	if strings.TrimSpace(sni) != "" {
+		tlsConn := tls.Client(rawConn, &tls.Config{
+			ServerName:         strings.TrimSpace(sni),
+			InsecureSkipVerify: true,
+		})
+		_ = tlsConn.SetDeadline(time.Now().Add(timeout))
+		if err := tlsConn.Handshake(); err != nil {
+			_ = rawConn.Close()
+			return nil, fmt.Errorf("TLS handshake (%s) gagal: %w", sni, err)
+		}
+		_ = tlsConn.SetDeadline(time.Time{})
+		conn = tlsConn
+	}
+
+	if strings.TrimSpace(payloadStr) != "" {
+		rendered := renderPayloadString(payloadStr, sshAddr)
+		if proxyAuth != "" && !strings.Contains(strings.ToLower(rendered), "proxy-authorization:") {
+			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
+			rendered = strings.Replace(rendered, "\r\n\r\n", "\r\nProxy-Authorization: Basic "+b64+"\r\n\r\n", 1)
+		}
+		segments := strings.Split(rendered, "[split]")
+		for i, seg := range segments {
+			if seg == "" {
+				continue
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(timeout))
+			if _, err := conn.Write([]byte(seg)); err != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("gagal kirim payload: %w", err)
+			}
+			if i < len(segments)-1 {
+				time.Sleep(120 * time.Millisecond)
+			}
+		}
+
+		// Baca header respons HTTP dari proxy/server (misal 101 Switching Protocols / 200 OK)
+		_ = conn.SetReadDeadline(time.Now().Add(timeout))
+		buf := make([]byte, 2048)
+		n, err := conn.Read(buf)
+		_ = conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("tidak ada respons HTTP dari proxy: %w", err)
+		}
+		respFirstLine := strings.SplitN(string(buf[:n]), "\r\n", 2)[0]
+		fmt.Println("[HTTP] Respons:", strings.TrimSpace(respFirstLine))
+	}
+
+	return conn, nil
+}
 
 func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")

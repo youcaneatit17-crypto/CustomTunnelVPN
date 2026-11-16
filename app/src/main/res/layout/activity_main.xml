@@ -677,34 +677,208 @@
                                 android:textSize="16sp" />
                         </LinearLayout>
 
-                        <LinearLayout
+                        <HorizontalScrollView
                             android:id="@+id/bodyCardMethod"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
+                            android:scrollbars="none">
+
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+
+                                <Button
+                                    android:id="@+id/btnMethodPayload"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="38dp"
+                                    android:layout_marginEnd="8dp"
+                                    android:backgroundTint="#161B24"
+                                    android:text="Payload"
+                                    android:textAllCaps="false"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="12sp" />
+
+                                <Button
+                                    android:id="@+id/btnMethodTls"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="38dp"
+                                    android:layout_marginEnd="8dp"
+                                    android:backgroundTint="#161B24"
+                                    android:text="TLS"
+                                    android:textAllCaps="false"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="12sp" />
+
+                                <Button
+                                    android:id="@+id/btnMethodSlowDns"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="38dp"
+                                    android:layout_marginEnd="8dp"
+                                    android:backgroundTint="#2C3545"
+                                    android:text="SlowDNS"
+                                    android:textAllCaps="false"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="12sp" />
+
+                                <Button
+                                    android:id="@+id/btnMethodDirect"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="38dp"
+                                    android:backgroundTint="#161B24"
+                                    android:text="Direct SSH"
+                                    android:textAllCaps="false"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+                        </HorizontalScrollView>
+                    </LinearLayout>
+
+                    <!-- KARTU PAYLOAD & PROXY JARAK JAUH -->
+                    <LinearLayout
+                        android:id="@+id/cardPayloadSection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:id="@+id/hdrCardPayload"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
                             android:orientation="horizontal">
 
-                            <Button
-                                android:id="@+id/btnMethodSlowDns"
-                                android:layout_width="wrap_content"
-                                android:layout_height="38dp"
-                                android:layout_marginEnd="8dp"
-                                android:backgroundTint="#2C3545"
-                                android:text="SlowDNS"
-                                android:textAllCaps="false"
-                                android:textColor="#FFFFFF"
-                                android:textSize="12sp" />
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:drawableStart="@drawable/ic_payload"
+                                android:drawablePadding="8dp"
+                                android:gravity="center_vertical"
+                                android:text="Payload"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
 
-                            <Button
-                                android:id="@+id/btnMethodDirect"
+                            <TextView
+                                android:id="@+id/arrowCardPayload"
                                 android:layout_width="wrap_content"
-                                android:layout_height="38dp"
-                                android:backgroundTint="#161B24"
-                                android:text="Direct SSH"
-                                android:textAllCaps="false"
+                                android:layout_height="wrap_content"
+                                android:text="⌃"
                                 android:textColor="#9CA3AF"
-                                android:textSize="12sp" />
+                                android:textSize="16sp" />
                         </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/bodyCardPayload"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="Payload kustom"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etCustomPayload"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:gravity="top|start"
+                                android:hint="GET / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+                                android:inputType="textMultiLine|textNoSuggestions"
+                                android:minHeight="104dp"
+                                android:padding="12dp"
+                                android:textColor="#F3F4F6"
+                                android:textColorHint="#6B7280"
+                                android:textSize="12.5sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="4dp"
+                                android:text="Proxy jarak jauh"
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+
+                            <EditText
+                                android:id="@+id/etRemoteProxy"
+                                android:layout_width="match_parent"
+                                android:layout_height="46dp"
+                                android:background="@drawable/bg_input"
+                                android:fontFamily="monospace"
+                                android:hint="104.18.1.196:80"
+                                android:paddingHorizontal="12dp"
+                                android:singleLine="true"
+                                android:textColor="#F3F4F6"
+                                android:textColorHint="#6B7280"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:text="Gunakan host:port. Tambahkan user:pass@ di depan host jika perlu. IPv6: [2001:db8::1]:80 atau user:pass@[2001:db8::1]:80."
+                                android:textColor="#9CA3AF"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- KARTU TLS / SNI -->
+                    <LinearLayout
+                        android:id="@+id/cardTlsSection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:drawableStart="@drawable/ic_lock_sni"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical"
+                            android:text="TLS / SSL (SNI)"
+                            android:textColor="#F3F4F6"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:layout_marginBottom="4dp"
+                            android:text="Server Name Indication (SNI)"
+                            android:textColor="#9CA3AF"
+                            android:textSize="11sp" />
+
+                        <EditText
+                            android:id="@+id/etTlsSni"
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:background="@drawable/bg_input"
+                            android:fontFamily="monospace"
+                            android:hint="investors.spotify.com"
+                            android:paddingHorizontal="12dp"
+                            android:singleLine="true"
+                            android:textColor="#F3F4F6"
+                            android:textColorHint="#6B7280"
+                            android:textSize="13sp" />
                     </LinearLayout>
 
                     <LinearLayout
