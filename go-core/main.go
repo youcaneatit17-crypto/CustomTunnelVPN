@@ -282,7 +282,11 @@ func (m *tunnelManager) refresh(reason string) {
 	m.list = newList
 	m.mu.Unlock()
 
-	log.Printf("[Refresh] %d jalur SlowDNS + SSH baru aktif!", len(newList))
+	if strings.TrimSpace(m.ns) != "" {
+		log.Printf("[Refresh] %d jalur SlowDNS + SSH baru aktif!", len(newList))
+	} else {
+		log.Printf("[Refresh] %d sesi SSH baru aktif!", len(newList))
+	}
 	if len(oldList) > 0 {
 		go func(items []*tunnelSession) {
 			time.Sleep(2 * time.Second)
@@ -913,6 +917,8 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 	}
 	if tc, ok := rawConn.(*net.TCPConn); ok {
 		_ = tc.SetNoDelay(true)
+		_ = tc.SetKeepAlive(true)
+		_ = tc.SetKeepAlivePeriod(45 * time.Second)
 	}
 
 	var conn net.Conn = rawConn
@@ -1059,7 +1065,11 @@ func main() {
 						defer c.Close()
 						line, _ := bufio.NewReader(c).ReadString('\n')
 						if strings.TrimSpace(line) == "REFRESH" {
-							mgr.refresh("Menyegarkan port UDP SlowDNS & sesi SSH...")
+							if strings.TrimSpace(mgr.ns) != "" {
+						mgr.refresh("Menyegarkan port UDP SlowDNS & sesi SSH...")
+					} else {
+						mgr.refresh("Menyegarkan sesi SSH...")
+					}
 						}
 					}(conn)
 				}
@@ -1067,42 +1077,68 @@ func main() {
 		}
 	}
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(*keepaliveSec) * time.Second)
-		defer ticker.Stop()
-		stalledCount := 0
-		for range ticker.C {
-			if mgr.isBusy() || mgr.refreshing.Load() {
-				stalledCount = 0
-				continue
-			}
-			client := mgr.getClient()
-			if client == nil {
-				continue
-			}
-			done := make(chan error, 1)
-			go func(c *ssh.Client) {
-				_, _, err := c.SendRequest("keepalive@openssh.com", true, nil)
-				done <- err
-			}(client)
-
-			select {
-			case err := <-done:
-				if err != nil {
-					stalledCount++
-				} else {
-					stalledCount = 0
+	if strings.TrimSpace(mgr.ns) == "" {
+		go func() {
+			var lastDead *ssh.Client
+			for {
+				time.Sleep(2 * time.Second)
+				if mgr.refreshing.Load() {
+					continue
 				}
-			case <-time.After(6 * time.Second):
-				stalledCount++
+				client := mgr.getClient()
+				if client == nil {
+					continue
+				}
+				if client == lastDead {
+					time.Sleep(3 * time.Second)
+					mgr.refresh("Mencoba menyambung ulang sesi SSH...")
+					continue
+				}
+				_ = client.Wait()
+				lastDead = client
+				if !mgr.refreshing.Load() {
+					mgr.refresh("Koneksi SSH terputus, menyambung ulang...")
+				}
 			}
+		}()
+	} else {
+		go func() {
+			ticker := time.NewTicker(time.Duration(*keepaliveSec) * time.Second)
+			defer ticker.Stop()
+			stalledCount := 0
+			for range ticker.C {
+				if mgr.isBusy() || mgr.refreshing.Load() {
+					stalledCount = 0
+					continue
+				}
+				client := mgr.getClient()
+				if client == nil {
+					continue
+				}
+				done := make(chan error, 1)
+				go func(c *ssh.Client) {
+					_, _, err := c.SendRequest("keepalive@openssh.com", true, nil)
+					done <- err
+				}(client)
 
-			if stalledCount >= 2 {
-				stalledCount = 0
-				mgr.refresh("Auto-Heal: jalur SlowDNS melambat, menyegarkan sesi...")
+				select {
+				case err := <-done:
+					if err != nil {
+						stalledCount++
+					} else {
+						stalledCount = 0
+					}
+				case <-time.After(6 * time.Second):
+					stalledCount++
+				}
+
+				if stalledCount >= 2 {
+					stalledCount = 0
+					mgr.refresh("Auto-Heal: jalur SlowDNS melambat, menyegarkan sesi...")
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	cache := newDNSCache()
 	dialSem := make(chan struct{}, 20)
