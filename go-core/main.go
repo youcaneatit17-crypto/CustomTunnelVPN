@@ -965,37 +965,6 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 	}
 
 	return conn, nil
-} else if strings.TrimSpace(proxyStr) != "" {
-		connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", sshAddr, sshAddr)
-		if proxyAuth != "" {
-			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
-			connectReq += "Proxy-Authorization: Basic " + b64 + "\r\n"
-		}
-		connectReq += "\r\n"
-		_ = conn.SetWriteDeadline(time.Now().Add(timeout))
-		if _, err := conn.Write([]byte(connectReq)); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("gagal kirim CONNECT proxy: %w", err)
-		}
-		br := bufio.NewReader(conn)
-		_ = conn.SetReadDeadline(time.Now().Add(timeout))
-		statusLine, err := br.ReadString('\n')
-		if err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("proxy tidak merespons CONNECT: %w", err)
-		}
-		fmt.Println("[HTTP] Proxy:", strings.TrimSpace(statusLine))
-		for {
-			hdrLine, err := br.ReadString('\n')
-			if err != nil || hdrLine == "\r\n" || hdrLine == "\n" {
-				break
-			}
-		}
-		_ = conn.SetReadDeadline(time.Time{})
-		return &bufferedNetConn{Conn: conn, r: br}, nil
-	}
-
-	return conn, nil
 }
 
 func main() {
