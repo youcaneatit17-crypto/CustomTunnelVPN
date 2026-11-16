@@ -815,6 +815,8 @@ func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, d
 	}
 }
 
+var keepaliveSec = flag.Int("keepalive", 3, "ssh keepalive interval seconds")
+
 func main() {
 	dnsttBin := flag.String("dnstt", "", "Path to libdnstt.so")
 	tunBin := flag.String("tunbin", "", "Path to libtun2socks.so")
