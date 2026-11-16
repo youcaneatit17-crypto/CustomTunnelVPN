@@ -943,7 +943,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 		return nil, fmt.Errorf("gagal koneksi ke %s: %w", dialTarget, err)
 	}
 	if tc, ok := rawConn.(*net.TCPConn); ok {
-		_ = tc.SetNoDelay(true); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536)
+		_ = tc.SetNoDelay(true); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536)
 		_ = tc.SetKeepAlive(true)
 		_ = tc.SetKeepAlivePeriod(45 * time.Second)
 	}
