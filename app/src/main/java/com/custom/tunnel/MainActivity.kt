@@ -63,7 +63,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnConnect: FloatingActionButton
     private lateinit var btnSaveEditorFab: FloatingActionButton
-    private lateinit var btnRefresh: Button
     private lateinit var btnCleanLog: Button
     private lateinit var tvLogs: TextView
     private lateinit var tvHeaderStatus: TextView
@@ -275,16 +274,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnRefresh.setOnClickListener {
-            if (TunnelVpnService.isRunning) {
-                tabLayout.getTabAt(1)?.select()
-                val refreshIntent = Intent(this, TunnelVpnService::class.java).apply {
-                    action = TunnelVpnService.ACTION_REFRESH
-                }
-                startService(refreshIntent)
-            }
-        }
-
         btnCleanLog.setOnClickListener {
             TunnelLogger.clear()
             tvLogs.text = ""
@@ -314,7 +303,6 @@ class MainActivity : AppCompatActivity() {
 
         btnConnect = findViewById(R.id.btnConnect)
         btnSaveEditorFab = findViewById(R.id.btnSaveEditorFab)
-        btnRefresh = findViewById(R.id.btnRefresh)
         btnCleanLog = findViewById(R.id.btnCleanLog)
         tvLogs = findViewById(R.id.tvLogs)
         tvHeaderStatus = findViewById(R.id.tvHeaderStatus)
@@ -1094,7 +1082,6 @@ class MainActivity : AppCompatActivity() {
             TunnelVpnService.STATE_CONNECTED -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_pause, theme))
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
-                btnRefresh.visibility = View.VISIBLE
                 tvHeaderStatus.text = "CONNECTED"
                 tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
@@ -1109,7 +1096,6 @@ class MainActivity : AppCompatActivity() {
             TunnelVpnService.STATE_CONNECTING -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel, theme))
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
-                btnRefresh.visibility = View.GONE
                 tvHeaderStatus.text = "CONNECTING"
                 tvHeaderStatus.setTextColor(Color.parseColor("#FBBF24"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
@@ -1120,7 +1106,6 @@ class MainActivity : AppCompatActivity() {
             else -> {
                 btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_play, theme))
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2563EB"))
-                btnRefresh.visibility = View.GONE
                 tvHeaderStatus.text = "OFFLINE"
                 tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
