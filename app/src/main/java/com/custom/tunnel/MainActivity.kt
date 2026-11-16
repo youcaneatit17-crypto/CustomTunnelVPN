@@ -104,9 +104,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navBeranda: LinearLayout
     private lateinit var navProfil: LinearLayout
     private lateinit var navPengaturan: LinearLayout
-    private lateinit var pillBeranda: TextView
-    private lateinit var pillProfil: TextView
-    private lateinit var pillPengaturan: TextView
+    private lateinit var pillBeranda: ImageView
+    private lateinit var pillProfil: ImageView
+    private lateinit var pillPengaturan: ImageView
     private lateinit var txtNavBeranda: TextView
     private lateinit var txtNavProfil: TextView
     private lateinit var txtNavPengaturan: TextView
@@ -1122,11 +1122,10 @@ class MainActivity : AppCompatActivity() {
             infoCol.addView(tvName)
             infoCol.addView(tvSub)
 
-            val btnDup = TextView(this).apply {
-                text = "⧉"
-                setTextColor(Color.parseColor("#9CA3AF"))
-                textSize = 18f
-                setPadding(20, 12, 20, 12)
+            val btnDup = ImageButton(this).apply {
+                setImageResource(R.drawable.ic_action_copy)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(18, 18, 18, 18)
                 setOnClickListener {
                     val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
                     val curArr = getProfilesArray()
@@ -1140,19 +1139,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            val btnEdit = TextView(this).apply {
-                text = "✎"
-                setTextColor(Color.parseColor("#E5E7EB"))
-                textSize = 18f
-                setPadding(20, 12, 20, 12)
+            val btnEdit = ImageButton(this).apply {
+                setImageResource(R.drawable.ic_action_edit)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(18, 18, 18, 18)
                 setOnClickListener { openProfileEditor(item) }
             }
 
-            val btnDel = TextView(this).apply {
-                text = "🗑"
-                setTextColor(Color.parseColor("#F87171"))
-                textSize = 16f
-                setPadding(18, 12, 16, 12)
+            val btnDel = ImageButton(this).apply {
+                setImageResource(R.drawable.ic_action_delete)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(18, 18, 18, 18)
                 setOnClickListener {
                     val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
                     val curArr = getProfilesArray()
@@ -1418,20 +1415,20 @@ class MainActivity : AppCompatActivity() {
                     val addrs = Collections.list(inf.inetAddresses)
                     for (addr in addrs) {
                         if (!addr.isLoopbackAddress && (addr.hostAddress?.indexOf(':') ?: -1) < 0) {
-                            tvLocalIp.text = "🌐 ${addr.hostAddress}"
+                            tvLocalIp.text = "${addr.hostAddress}"
                             return
                         }
                     }
                 }
             }
         } catch (_: Exception) {}
-        tvLocalIp.text = "🌐 127.0.0.1"
+        tvLocalIp.text = "127.0.0.1"
     }
 
     private fun updateButtonState() {
         when (TunnelVpnService.connectionState) {
             TunnelVpnService.STATE_CONNECTED -> {
-                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_pause, theme))
+                btnConnect.setImageResource(R.drawable.ic_stop)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
                 tvHeaderStatus.text = "CONNECTED"
                 tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
@@ -1445,7 +1442,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             TunnelVpnService.STATE_CONNECTING -> {
-                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel, theme))
+                btnConnect.setImageResource(R.drawable.ic_stop)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
                 tvHeaderStatus.text = "CONNECTING"
                 tvHeaderStatus.setTextColor(Color.parseColor("#FBBF24"))
@@ -1455,7 +1452,7 @@ class MainActivity : AppCompatActivity() {
                 isTrafficMonitorActive = false
             }
             else -> {
-                btnConnect.setImageDrawable(resources.getDrawable(android.R.drawable.ic_media_play, theme))
+                btnConnect.setImageResource(R.drawable.ic_play)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2563EB"))
                 tvHeaderStatus.text = "OFFLINE"
                 tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
