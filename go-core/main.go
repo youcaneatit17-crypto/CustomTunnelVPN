@@ -845,11 +845,6 @@ func renderPayloadString(raw, sshAddr string) string {
 }
 
 
-func (b *bufferedNetConn) Read(p []byte) (int, error) {
-	return b.r.Read(p)
-}
-
-
 type bufferedNetConn struct {
 	net.Conn
 	r *bufio.Reader
