@@ -77,8 +77,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLocalIp: TextView
     private lateinit var tvHomeProfileName: TextView
     private lateinit var tvHomeProfileSub: TextView
-    private lateinit var tvAutoPingSummaryHome: TextView
-    private lateinit var tvSplitSummaryHome: TextView
+    private lateinit var ivBrandLogo: ImageView
 
     private lateinit var topBarMain: LinearLayout
     private lateinit var topBarSettings: LinearLayout
@@ -222,9 +221,7 @@ class MainActivity : AppCompatActivity() {
             val active = getActiveProfile()
             if (active != null) openProfileEditor(active) else switchNav("profil")
         }
-        findViewById<TextView>(R.id.btnHomeToAutoPing).setOnClickListener { switchNav("settings_autoping") }
-        findViewById<TextView>(R.id.btnLihatSplit).setOnClickListener { switchNav("settings_apps") }
-
+        
         btnModeSingle.setOnClickListener {
             etSessions.setText("1")
             updateEditorChips()
@@ -334,8 +331,7 @@ class MainActivity : AppCompatActivity() {
         tvLocalIp = findViewById(R.id.tvLocalIp)
         tvHomeProfileName = findViewById(R.id.tvHomeProfileName)
         tvHomeProfileSub = findViewById(R.id.tvHomeProfileSub)
-        tvAutoPingSummaryHome = findViewById(R.id.tvAutoPingSummaryHome)
-        tvSplitSummaryHome = findViewById(R.id.tvSplitSummaryHome)
+        ivBrandLogo = findViewById(R.id.ivBrandLogo)
 
         topBarMain = findViewById(R.id.topBarMain)
         topBarSettings = findViewById(R.id.topBarSettings)
@@ -628,11 +624,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Mode $modeTitle • Ping $target tiap $interval detik."
         }
-        tvAutoPingSummaryHome.text = if (pingMode == "off") {
-            "Auto Ping: Nonaktif"
-        } else {
-            "Auto Ping: $modeTitle ($target)"
-        }
 
         val dns1 = prefs.getString("vpn_dns1", "8.8.8.8") ?: "8.8.8.8"
         val dns2 = prefs.getString("vpn_dns2", "1.1.1.1") ?: "1.1.1.1"
@@ -721,8 +712,9 @@ class MainActivity : AppCompatActivity() {
             "beranda" -> {
                 topBarMain.visibility = View.VISIBLE
                 topBarSettings.visibility = View.GONE
+                ivBrandLogo.visibility = View.VISIBLE
                 tvTopTitle.text = "Custom Tunnel"
-                tvTopTitle.setTextColor(Color.parseColor("#FB923C"))
+                tvTopTitle.setTextColor(Color.parseColor("#F8FAFC"))
                 tvHeaderStatus.visibility = View.VISIBLE
                 tabLayout.visibility = View.VISIBLE
                 btnConnect.show()
@@ -739,6 +731,7 @@ class MainActivity : AppCompatActivity() {
             "profil" -> {
                 topBarMain.visibility = View.VISIBLE
                 topBarSettings.visibility = View.GONE
+                ivBrandLogo.visibility = View.GONE
                 tvTopTitle.text = "Profil"
                 tvTopTitle.setTextColor(Color.WHITE)
                 tvHeaderStatus.visibility = View.GONE
@@ -754,6 +747,7 @@ class MainActivity : AppCompatActivity() {
                 topBarMain.visibility = View.VISIBLE
                 topBarSettings.visibility = View.GONE
                 btnBackFromEditor.visibility = View.VISIBLE
+                ivBrandLogo.visibility = View.GONE
                 tvTopTitle.text = editorProtocol
                 tvTopTitle.setTextColor(Color.WHITE)
                 tvHeaderStatus.visibility = View.GONE
@@ -767,6 +761,7 @@ class MainActivity : AppCompatActivity() {
             "pengaturan" -> {
                 topBarMain.visibility = View.VISIBLE
                 topBarSettings.visibility = View.GONE
+                ivBrandLogo.visibility = View.GONE
                 tvTopTitle.text = "Pengaturan"
                 tvTopTitle.setTextColor(Color.WHITE)
                 tvHeaderStatus.visibility = View.GONE
@@ -1254,7 +1249,6 @@ class MainActivity : AppCompatActivity() {
         tvSelectedAppsCount.text = "${selected.size} dipilih"
         tvMenuSplitDesc.text = summary
         valVpnSplitSub.text = summary
-        tvSplitSummaryHome.text = "VPN per aplikasi: $summary"
     }
 
     private fun loadInstalledAppsAsync() {
@@ -1430,7 +1424,7 @@ class MainActivity : AppCompatActivity() {
             TunnelVpnService.STATE_CONNECTED -> {
                 btnConnect.setImageResource(R.drawable.ic_stop)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
-                tvHeaderStatus.text = "CONNECTED"
+                tvHeaderStatus.text = "● Connected"
                 tvHeaderStatus.setTextColor(Color.parseColor("#4ADE80"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_online)
                 tvStatusDotLabel.text = "● Terhubung"
@@ -1444,7 +1438,7 @@ class MainActivity : AppCompatActivity() {
             TunnelVpnService.STATE_CONNECTING -> {
                 btnConnect.setImageResource(R.drawable.ic_stop)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
-                tvHeaderStatus.text = "CONNECTING"
+                tvHeaderStatus.text = "● Connecting"
                 tvHeaderStatus.setTextColor(Color.parseColor("#FBBF24"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
                 tvStatusDotLabel.text = "● Menghubungkan..."
@@ -1454,7 +1448,7 @@ class MainActivity : AppCompatActivity() {
             else -> {
                 btnConnect.setImageResource(R.drawable.ic_play)
                 btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2563EB"))
-                tvHeaderStatus.text = "OFFLINE"
+                tvHeaderStatus.text = "● Offline"
                 tvHeaderStatus.setTextColor(Color.parseColor("#9CA3AF"))
                 tvHeaderStatus.setBackgroundResource(R.drawable.bg_pill_offline)
                 tvStatusDotLabel.text = "● Tidak aktif"
