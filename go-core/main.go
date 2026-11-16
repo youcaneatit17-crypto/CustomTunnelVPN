@@ -896,6 +896,95 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 		rendered := renderPayloadString(payloadStr, sshAddr)
 		if proxyAuth != "" && !strings.Contains(strings.ToLower(rendered), "proxy-authorization:") {
 			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
+			rendered = strings.Replace(rendered, "\r\n\r\n", "\r\nProxy-Authorization: Basic "+b64+"\r\n\r\n", 1)
+		}
+		segments := strings.Split(rendered, "[split]")
+		for i, seg := range segments {
+			if seg == "" {
+				continue
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(timeout))
+			if _, err := conn.Write([]byte(seg)); err != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("gagal kirim payload: %w", err)
+			}
+			if i < len(segments)-1 {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+
+		br := bufio.NewReader(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(timeout))
+		statusLine, err := br.ReadString('\n')
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("tidak ada respons HTTP dari server: %w", err)
+		}
+		fmt.Println("[HTTP] Respons:", strings.TrimSpace(statusLine))
+		for {
+			hdrLine, err := br.ReadString('\n')
+			if err != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("header HTTP terputus: %w", err)
+			}
+			if hdrLine == "\r\n" || hdrLine == "\n" {
+				break
+			}
+		}
+		_ = conn.SetReadDeadline(time.Time{})
+		return &bufferedNetConn{Conn: conn, r: br}, nil
+	}
+
+	return conn, nil
+}
+
+func (b *bufferedNetConn) Read(p []byte) (int, error) {
+	return b.r.Read(p)
+}
+
+func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout time.Duration) (net.Conn, error) {
+	dialTarget := sshAddr
+	var proxyAuth string
+
+	if strings.TrimSpace(proxyStr) != "" {
+		px := strings.TrimSpace(proxyStr)
+		if atIdx := strings.LastIndex(px, "@"); atIdx != -1 {
+			proxyAuth = px[:atIdx]
+			px = px[atIdx+1:]
+		}
+		if !strings.Contains(px, ":") {
+			px = net.JoinHostPort(px, "80")
+		}
+		dialTarget = px
+	}
+
+	rawConn, err := net.DialTimeout("tcp", dialTarget, timeout)
+	if err != nil {
+		return nil, fmt.Errorf("gagal koneksi ke %s: %w", dialTarget, err)
+	}
+	if tc, ok := rawConn.(*net.TCPConn); ok {
+		_ = tc.SetNoDelay(true)
+	}
+
+	var conn net.Conn = rawConn
+	if strings.TrimSpace(sni) != "" {
+		tlsConn := tls.Client(rawConn, &tls.Config{
+			ServerName:         strings.TrimSpace(sni),
+			InsecureSkipVerify: true,
+		})
+		_ = tlsConn.SetDeadline(time.Now().Add(timeout))
+		if err := tlsConn.Handshake(); err != nil {
+			_ = rawConn.Close()
+			return nil, fmt.Errorf("TLS handshake (%s) gagal: %w", sni, err)
+		}
+		_ = tlsConn.SetDeadline(time.Time{})
+		conn = tlsConn
+	}
+
+	if strings.TrimSpace(payloadStr) != "" {
+		rendered := renderPayloadString(payloadStr, sshAddr)
+		if proxyAuth != "" && !strings.Contains(strings.ToLower(rendered), "proxy-authorization:") {
+			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
 			rendered = strings.Replace(rendered, "
 
 ", "
