@@ -154,8 +154,29 @@ func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 			log.Printf("[ss] SlowDNS: %s aktif", m.dnsType)
 		}
 	} else if id == 1 {
-		log.Printf("[ss] Tujuan koneksi: %s", m.sshAddr)
-		log.Printf("[ss] Metode SSH: Direct SSH-2")
+		hasPayload := strings.TrimSpace(*customPayload) != ""
+		hasProxy := strings.TrimSpace(*remoteProxy) != ""
+		hasSni := strings.TrimSpace(*sniHost) != ""
+		if hasProxy {
+			log.Printf("[ss] Tujuan koneksi: %s (Proxy: %s)", m.sshAddr, strings.TrimSpace(*remoteProxy))
+		} else {
+			log.Printf("[ss] Tujuan koneksi: %s", m.sshAddr)
+		}
+		switch {
+		case hasPayload && hasSni:
+			log.Printf("[ss] Metode SSH: TLS/SNI + HTTP/WS Payload")
+		case hasPayload:
+			log.Printf("[ss] Metode SSH: HTTP/WS Payload Tunnel")
+		case hasSni:
+			log.Printf("[ss] Metode SSH: SSL/TLS (SNI: %s)", strings.TrimSpace(*sniHost))
+		case hasProxy:
+			log.Printf("[ss] Metode SSH: HTTP Proxy Tunnel")
+		default:
+			log.Printf("[ss] Metode SSH: Direct SSH-2")
+		}
+		if hasPayload {
+			log.Printf("[ss] Payload SSH: Dikirim")
+		}
 	}
 
 	var fingerprintStr string
@@ -176,7 +197,23 @@ func (m *tunnelManager) dialSingleSession(id int) (*tunnelSession, error) {
 		Timeout: 35 * time.Second,
 	}
 
-	sshClient, err := ssh.Dial("tcp", targetDialAddr, config)
+	var sshClient *ssh.Client
+	var err error
+	if dnsttCmd == nil && (strings.TrimSpace(*customPayload) != "" || strings.TrimSpace(*remoteProxy) != "" || strings.TrimSpace(*sniHost) != "") {
+		var rawConn net.Conn
+		rawConn, err = dialWithPayloadProxy(targetDialAddr, *remoteProxy, *customPayload, *sniHost, 20*time.Second)
+		if err == nil {
+			c, chans, reqs, sshErr := ssh.NewClientConn(rawConn, targetDialAddr, config)
+			if sshErr != nil {
+				_ = rawConn.Close()
+				err = sshErr
+			} else {
+				sshClient = ssh.NewClient(c, chans, reqs)
+			}
+		}
+	} else {
+		sshClient, err = ssh.Dial("tcp", targetDialAddr, config)
+	}
 	if err != nil {
 		if dnsttCmd != nil && dnsttCmd.Process != nil {
 			_ = dnsttCmd.Process.Kill()
@@ -899,7 +936,8 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
 			rendered = strings.Replace(rendered, "\r\n\r\n", "\r\nProxy-Authorization: Basic "+b64+"\r\n\r\n", 1)
 		}
-		segments := strings.Split(rendered, "[split]")
+		normSplit := strings.ReplaceAll(strings.ReplaceAll(rendered, "[delay_split]", "[split]"), "[instant_split]", "[split]")
+		segments := strings.Split(normSplit, "[split]")
 		for i, seg := range segments {
 			if seg == "" {
 				continue
@@ -921,7 +959,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 			_ = conn.Close()
 			return nil, fmt.Errorf("tidak ada respons HTTP dari server: %w", err)
 		}
-		fmt.Println("[HTTP] Respons:", strings.TrimSpace(statusLine))
+		log.Printf("[HTTP] Respons: %s", strings.TrimSpace(statusLine))
 		for {
 			hdrLine, err := br.ReadString('\n')
 			if err != nil {
@@ -953,7 +991,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 			_ = conn.Close()
 			return nil, fmt.Errorf("proxy tidak merespons CONNECT: %w", err)
 		}
-		fmt.Println("[HTTP] Proxy:", strings.TrimSpace(statusLine))
+		log.Printf("[HTTP] Proxy: %s", strings.TrimSpace(statusLine))
 		for {
 			hdrLine, err := br.ReadString('\n')
 			if err != nil || hdrLine == "\r\n" || hdrLine == "\n" {
