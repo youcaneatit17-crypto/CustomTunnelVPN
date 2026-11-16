@@ -65,6 +65,9 @@ class TunnelVpnService : VpnService() {
         @Volatile
         var shouldKeepRunning = false
 
+        @Volatile
+        var autoPingEnabled = true
+
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_REFRESH = "ACTION_REFRESH"
@@ -101,6 +104,7 @@ class TunnelVpnService : VpnService() {
             udpgwPort = intent?.getStringExtra("udpgw") ?: "7300"
         )
         lastConfig = config
+        autoPingEnabled = getSharedPreferences("tunnel_cfg", MODE_PRIVATE).getBoolean("auto_ping", true)
 
         acquireWakeLock()
         startForegroundNotification("Menghubungkan ${config.profileName}...")
