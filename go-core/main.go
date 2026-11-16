@@ -817,6 +817,7 @@ func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, d
 	}
 }
 
+var lastTrafficUnix int64
 var keepaliveSec = flag.Int("keepalive", 3, "ssh keepalive interval seconds")
 
 var customPayload = flag.String("payload", "", "custom HTTP payload")
@@ -841,6 +842,15 @@ func renderPayloadString(raw, sshAddr string) string {
 	p = strings.ReplaceAll(p, "[protocol]", "HTTP/1.1")
 	p = strings.ReplaceAll(p, "[ua]", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36")
 	return p
+}
+
+type bufferedNetConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (b *bufferedNetConn) Read(p []byte) (int, error) {
+	return b.r.Read(p)
 }
 
 func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout time.Duration) (net.Conn, error) {
@@ -886,7 +896,12 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 		rendered := renderPayloadString(payloadStr, sshAddr)
 		if proxyAuth != "" && !strings.Contains(strings.ToLower(rendered), "proxy-authorization:") {
 			b64 := base64.StdEncoding.EncodeToString([]byte(proxyAuth))
-			rendered = strings.Replace(rendered, "\r\n\r\n", "\r\nProxy-Authorization: Basic "+b64+"\r\n\r\n", 1)
+			rendered = strings.Replace(rendered, "
+
+", "
+Proxy-Authorization: Basic "+b64+"
+
+", 1)
 		}
 		segments := strings.Split(rendered, "[split]")
 		for i, seg := range segments {
@@ -899,21 +914,36 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 				return nil, fmt.Errorf("gagal kirim payload: %w", err)
 			}
 			if i < len(segments)-1 {
-				time.Sleep(120 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 
-		// Baca header respons HTTP dari proxy/server (misal 101 Switching Protocols / 200 OK)
+		// Baca baris demi baris sampai baris kosong (
+) menggunakan bufio.Reader agar banner SSH-2.0 tetap utuh di buffer
+		br := bufio.NewReader(conn)
 		_ = conn.SetReadDeadline(time.Now().Add(timeout))
-		buf := make([]byte, 2048)
-		n, err := conn.Read(buf)
-		_ = conn.SetReadDeadline(time.Time{})
+		statusLine, err := br.ReadString('
+')
 		if err != nil {
 			_ = conn.Close()
-			return nil, fmt.Errorf("tidak ada respons HTTP dari proxy: %w", err)
+			return nil, fmt.Errorf("tidak ada respons HTTP dari server: %w", err)
 		}
-		respFirstLine := strings.SplitN(string(buf[:n]), "\r\n", 2)[0]
-		fmt.Println("[HTTP] Respons:", strings.TrimSpace(respFirstLine))
+		fmt.Println("[HTTP] Respons:", strings.TrimSpace(statusLine))
+		for {
+			hdrLine, err := br.ReadString('
+')
+			if err != nil {
+				_ = conn.Close()
+				return nil, fmt.Errorf("header HTTP terputus: %w", err)
+			}
+			if hdrLine == "
+" || hdrLine == "
+" {
+				break
+			}
+		}
+		_ = conn.SetReadDeadline(time.Time{})
+		return &bufferedNetConn{Conn: conn, r: br}, nil
 	}
 
 	return conn, nil

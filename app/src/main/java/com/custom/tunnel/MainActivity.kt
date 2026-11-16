@@ -539,7 +539,7 @@ class MainActivity : AppCompatActivity() {
 
         // Sub-halaman SSH & SlowDNS
         findViewById<LinearLayout>(R.id.itemSshKeepalive).setOnClickListener {
-            showTextSettingDialog("Interval SSH Keep-alive (detik)", prefs.getInt("ssh_keepalive", 3).toString(), true) { v ->
+            showTextSettingDialog("Interval SSH Keep-alive (detik)", prefs.getInt("ssh_keepalive", 15).toString(), true) { v ->
                 val num = v.toIntOrNull()?.coerceIn(2, 30) ?: return@showTextSettingDialog
                 prefs.edit().putInt("ssh_keepalive", num).apply()
                 refreshAllSettingsLabels()
@@ -663,7 +663,7 @@ class MainActivity : AppCompatActivity() {
         val dns1 = prefs.getString("vpn_dns1", "8.8.8.8") ?: "8.8.8.8"
         val dns2 = prefs.getString("vpn_dns2", "1.1.1.1") ?: "1.1.1.1"
         val mtu = prefs.getInt("vpn_mtu", 1400)
-        val keepalive = prefs.getInt("ssh_keepalive", 3)
+        val keepalive = prefs.getInt("ssh_keepalive", 15)
         val connTimeout = prefs.getInt("connect_timeout", 30)
         val defUdpgw = prefs.getString("default_udpgw", "7300") ?: "7300"
 

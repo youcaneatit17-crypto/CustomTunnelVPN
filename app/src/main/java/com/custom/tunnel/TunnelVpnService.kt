@@ -179,7 +179,7 @@ class TunnelVpnService : VpnService() {
 
         try {
             val appPrefs = getSharedPreferences("app_settings", MODE_PRIVATE)
-            val keepaliveSec = appPrefs.getInt("ssh_keepalive", 3).coerceIn(2, 30)
+            val keepaliveSec = appPrefs.getInt("ssh_keepalive", 15).coerceIn(2, 30)
             val handshakeTimeoutMs = (appPrefs.getInt("connect_timeout", 30).coerceIn(10, 90)) * 1000L
             val vpnMtu = appPrefs.getInt("vpn_mtu", 1400).coerceIn(1200, 1500)
             val dns1 = appPrefs.getString("vpn_dns1", "8.8.8.8")?.trim().orEmpty().ifEmpty { "8.8.8.8" }
