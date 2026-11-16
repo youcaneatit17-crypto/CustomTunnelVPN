@@ -129,9 +129,14 @@ class TunnelVpnService : VpnService() {
                 }
 
                 val sessionCleanExit = runSingleTunnelSession(config)
-                cleanupCoreProcessOnly()
+                cleanupAllResources()
 
                 if (!shouldKeepRunning) break
+
+                while (shouldKeepRunning && isActive && !isNetworkAvailable()) {
+                    updateNotification("Menunggu jaringan...")
+                    delay(2000)
+                }
 
                 if (sessionCleanExit) {
                     attempt = 0
@@ -279,6 +284,9 @@ class TunnelVpnService : VpnService() {
 
                 while (isActive && shouldKeepRunning) {
                     delay(15000)
+                    if (isReconnecting.get()) {
+                        continue
+                    }
                     try {
                         val start = System.currentTimeMillis()
                         Socket(socksProxy).use { socket ->
@@ -336,7 +344,7 @@ class TunnelVpnService : VpnService() {
             } catch (e: Exception) {
                 TunnelLogger.log("Gagal refresh sesi: ${e.message}", "#EF5350")
             } finally {
-                delay(1500)
+                delay(20000)
                 isReconnecting.set(false)
             }
         }
@@ -403,6 +411,18 @@ class TunnelVpnService : VpnService() {
             }
         } catch (_: Exception) {}
         coreProcess = null
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val net = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        } catch (_: Exception) {
+            true
+        }
     }
 
     private fun cleanupAllResources() {
