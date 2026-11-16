@@ -898,21 +898,6 @@ func (c *rxTrackConn) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func dialSSHWithTimeout(client *ssh.Client, network, addr string, timeout time.Duration) (net.Conn, error) {
-	type res struct {
-		conn net.Conn
-		err  error
-	}
-	ch := make(chan res, 1)
-	go func() { c, err := client.Dial(network, addr); ch <- res{c, err} }()
-	select {
-	case r := <-ch:
-		return r.conn, r.err
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("SSH channel timeout (%s)", addr)
-	}
-}
-
 type bufferedNetConn struct {
 	net.Conn
 	r *bufio.Reader
