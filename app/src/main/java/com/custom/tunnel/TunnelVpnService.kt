@@ -280,38 +280,18 @@ class TunnelVpnService : VpnService() {
 
             pingJob = launch {
                 val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localSocksPort))
-                var failCount = 0
-
                 while (isActive && shouldKeepRunning) {
-                    delay(15000)
-                    if (isReconnecting.get()) {
-                        continue
-                    }
+                    delay(10000)
+                    if (!autoPingEnabled) continue
                     try {
                         val start = System.currentTimeMillis()
                         Socket(socksProxy).use { socket ->
-                            socket.connect(InetSocketAddress.createUnresolved("1.1.1.1", 80), 6000)
+                            socket.connect(InetSocketAddress.createUnresolved("1.1.1.1", 80), 4000)
                         }
                         val ping = System.currentTimeMillis() - start
-                        if (failCount > 0) {
-                            TunnelLogger.log("Jalur pulih ($ping ms)", "#4ADE80")
-                        } else {
-                            TunnelLogger.log("Ping TCP (1.1.1.1:80): $ping ms", "#81C784")
-                        }
-                        failCount = 0
+                        TunnelLogger.log("Ping TCP (1.1.1.1:80): $ping ms", "#81C784")
                     } catch (_: Exception) {
-                        failCount++
-                        TunnelLogger.log("Ping timeout ($failCount/5)", "#FFB74D")
-
-                        if (failCount == 3) {
-                            TunnelLogger.log("Menyegarkan sesi SSH...", "#64B5F6")
-                            triggerSeamlessRefresh()
-                        } else if (failCount >= 5) {
-                            TunnelLogger.log("Koneksi tidak merespons (5x timeout), menyambung ulang...", "#EF5350")
-                            connectionState = STATE_CONNECTING
-                            sessionBroken.complete(Unit)
-                            break
-                        }
+                        TunnelLogger.log("Ping TCP timeout", "#FFB74D")
                     }
                 }
             }
@@ -379,7 +359,11 @@ class TunnelVpnService : VpnService() {
                 override fun onLost(network: Network) {
                     if (network.networkHandle == activeNetworkHandle) activeNetworkHandle = -1L
                     if (shouldKeepRunning) {
-                        TunnelLogger.log("Jaringan utama terputus, menunggu koneksi...", "#FFB74D")
+                        TunnelLogger.log("Jaringan terputus, memulai ulang koneksi...", "#FFB74D")
+                        connectionState = STATE_CONNECTING
+                        tunnelJob?.cancel()
+                        cleanupAllResources()
+                        lastConfig?.let { startSupervisorLoop(it) }
                     }
                 }
             }
