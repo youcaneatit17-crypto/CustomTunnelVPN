@@ -21,11 +21,13 @@ import android.os.Looper
 import android.os.Process
 import android.text.Editable
 import android.text.Html
+import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -75,17 +77,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLocalIp: TextView
     private lateinit var tvHomeProfileName: TextView
     private lateinit var tvHomeProfileSub: TextView
+    private lateinit var tvAutoPingSummaryHome: TextView
     private lateinit var tvSplitSummaryHome: TextView
 
     private lateinit var topBarMain: LinearLayout
     private lateinit var topBarSettings: LinearLayout
     private lateinit var btnBackFromEditor: ImageButton
+    private lateinit var btnBackFromSettings: ImageButton
+    private lateinit var btnClearSelectedApps: TextView
     private lateinit var btnAddProfileMenu: TextView
     private lateinit var tvTopTitle: TextView
+    private lateinit var tvSettingsSubTitle: TextView
+
     private lateinit var layoutUtama: ScrollView
     private lateinit var layoutLog: LinearLayout
     private lateinit var layoutProfil: ScrollView
     private lateinit var layoutProfileEditor: ScrollView
+    private lateinit var layoutSettingsMenu: ScrollView
+    private lateinit var layoutSettingsAutoPing: ScrollView
+    private lateinit var layoutSettingsVpnBehavior: ScrollView
+    private lateinit var layoutSettingsTunnelCore: ScrollView
     private lateinit var layoutPengaturan: LinearLayout
     private lateinit var scrollLog: ScrollView
     private lateinit var tabLayout: TabLayout
@@ -105,6 +116,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnExportJson: Button
     private lateinit var btnImportJson: Button
 
+    // Auto Ping Settings Views
+    private lateinit var btnPingModeOff: Button
+    private lateinit var btnPingModeKeepAlive: Button
+    private lateinit var btnPingModeReset: Button
+    private lateinit var btnPingModeAgresif: Button
+    private lateinit var tvPingModeBanner: TextView
+    private lateinit var valPingTarget: TextView
+    private lateinit var valPingInterval: TextView
+    private lateinit var valPingTimeout: TextView
+    private lateinit var valPingThreshold: TextView
+    private lateinit var tvMenuAutoPingDesc: TextView
+
+    // VPN Behavior & Tunnel Core Views
+    private lateinit var swAutoReconnect: Switch
+    private lateinit var valVpnDns: TextView
+    private lateinit var valVpnMtu: TextView
+    private lateinit var valVpnSplitSub: TextView
+    private lateinit var valSshKeepalive: TextView
+    private lateinit var valConnectTimeout: TextView
+    private lateinit var valDefaultUdpgw: TextView
+
+    // Split Tunnel Views
+    private lateinit var tvMenuSplitDesc: TextView
     private lateinit var tvSplitModeDesc: TextView
     private lateinit var tvSelectedAppsCount: TextView
     private lateinit var btnFilterUserApps: Button
@@ -150,19 +184,37 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         setupDnsSpinner()
         setupCollapsibleCards()
+        setupSettingsInteractions()
         migrateLegacyConfigIfNeeded()
         refreshActiveProfileHomeCard()
         renderProfilesList()
-        updateSplitTunnelLabels()
+        refreshAllSettingsLabels()
         updateButtonState()
         renderLogsNow()
         getMobileInterfaceIp()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when (currentNav) {
+                    "editor" -> switchNav("profil")
+                    "settings_autoping", "settings_vpn", "settings_tunnel", "settings_apps" -> switchNav("pengaturan")
+                    "profil", "pengaturan" -> switchNav("beranda")
+                    else -> finish()
+                }
+            }
+        })
 
         navBeranda.setOnClickListener { switchNav("beranda") }
         navProfil.setOnClickListener { switchNav("profil") }
         navPengaturan.setOnClickListener { switchNav("pengaturan") }
 
         btnBackFromEditor.setOnClickListener { switchNav("profil") }
+        btnBackFromSettings.setOnClickListener {
+            when (currentNav) {
+                "settings_autoping", "settings_vpn", "settings_tunnel", "settings_apps" -> switchNav("pengaturan")
+                else -> switchNav("beranda")
+            }
+        }
         btnAddProfileMenu.setOnClickListener { showAddProtocolPopup(it) }
 
         findViewById<Button>(R.id.btnHomePickProfile).setOnClickListener { showQuickProfileSelector() }
@@ -170,8 +222,8 @@ class MainActivity : AppCompatActivity() {
             val active = getActiveProfile()
             if (active != null) openProfileEditor(active) else switchNav("profil")
         }
-        findViewById<TextView>(R.id.btnLihatSplit).setOnClickListener { switchNav("pengaturan") }
-        findViewById<ImageButton>(R.id.btnBackFromSettings).setOnClickListener { switchNav("beranda") }
+        findViewById<TextView>(R.id.btnHomeToAutoPing).setOnClickListener { switchNav("settings_autoping") }
+        findViewById<TextView>(R.id.btnLihatSplit).setOnClickListener { switchNav("settings_apps") }
 
         btnModeSingle.setOnClickListener {
             etSessions.setText("1")
@@ -191,39 +243,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSaveEditorFab.setOnClickListener { saveEditorProfile() }
-
-        findViewById<LinearLayout>(R.id.btnSelectSplitMode).setOnClickListener { showSplitModeDialog() }
-        findViewById<TextView>(R.id.btnClearSelectedApps).setOnClickListener {
-            getSharedPreferences("split_tunnel", MODE_PRIVATE).edit()
-                .putStringSet("packages", emptySet()).apply()
-            updateSplitTunnelLabels()
-            filterInstalledApps()
-            Toast.makeText(this, "Pilihan aplikasi dibersihkan", Toast.LENGTH_SHORT).show()
-        }
-
-        btnFilterUserApps.setOnClickListener {
-            showSystemApps = false
-            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
-            btnFilterUserApps.setTextColor(Color.parseColor("#E2E8F0"))
-            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
-            btnFilterAllApps.setTextColor(Color.parseColor("#9CA3AF"))
-            filterInstalledApps()
-        }
-
-        btnFilterAllApps.setOnClickListener {
-            showSystemApps = true
-            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
-            btnFilterAllApps.setTextColor(Color.parseColor("#E2E8F0"))
-            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
-            btnFilterUserApps.setTextColor(Color.parseColor("#9CA3AF"))
-            filterInstalledApps()
-        }
-
-        etSearchApps.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) { filterInstalledApps() }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
@@ -315,17 +334,26 @@ class MainActivity : AppCompatActivity() {
         tvLocalIp = findViewById(R.id.tvLocalIp)
         tvHomeProfileName = findViewById(R.id.tvHomeProfileName)
         tvHomeProfileSub = findViewById(R.id.tvHomeProfileSub)
+        tvAutoPingSummaryHome = findViewById(R.id.tvAutoPingSummaryHome)
         tvSplitSummaryHome = findViewById(R.id.tvSplitSummaryHome)
 
         topBarMain = findViewById(R.id.topBarMain)
         topBarSettings = findViewById(R.id.topBarSettings)
         btnBackFromEditor = findViewById(R.id.btnBackFromEditor)
+        btnBackFromSettings = findViewById(R.id.btnBackFromSettings)
+        btnClearSelectedApps = findViewById(R.id.btnClearSelectedApps)
         btnAddProfileMenu = findViewById(R.id.btnAddProfileMenu)
         tvTopTitle = findViewById(R.id.tvTopTitle)
+        tvSettingsSubTitle = findViewById(R.id.tvSettingsSubTitle)
+
         layoutUtama = findViewById(R.id.layoutUtama)
         layoutLog = findViewById(R.id.layoutLog)
         layoutProfil = findViewById(R.id.layoutProfil)
         layoutProfileEditor = findViewById(R.id.layoutProfileEditor)
+        layoutSettingsMenu = findViewById(R.id.layoutSettingsMenu)
+        layoutSettingsAutoPing = findViewById(R.id.layoutSettingsAutoPing)
+        layoutSettingsVpnBehavior = findViewById(R.id.layoutSettingsVpnBehavior)
+        layoutSettingsTunnelCore = findViewById(R.id.layoutSettingsTunnelCore)
         layoutPengaturan = findViewById(R.id.layoutPengaturan)
         scrollLog = findViewById(R.id.scrollLog)
         tabLayout = findViewById(R.id.tabLayout)
@@ -345,12 +373,281 @@ class MainActivity : AppCompatActivity() {
         btnExportJson = findViewById(R.id.btnExportJson)
         btnImportJson = findViewById(R.id.btnImportJson)
 
+        btnPingModeOff = findViewById(R.id.btnPingModeOff)
+        btnPingModeKeepAlive = findViewById(R.id.btnPingModeKeepAlive)
+        btnPingModeReset = findViewById(R.id.btnPingModeReset)
+        btnPingModeAgresif = findViewById(R.id.btnPingModeAgresif)
+        tvPingModeBanner = findViewById(R.id.tvPingModeBanner)
+        valPingTarget = findViewById(R.id.valPingTarget)
+        valPingInterval = findViewById(R.id.valPingInterval)
+        valPingTimeout = findViewById(R.id.valPingTimeout)
+        valPingThreshold = findViewById(R.id.valPingThreshold)
+        tvMenuAutoPingDesc = findViewById(R.id.tvMenuAutoPingDesc)
+
+        swAutoReconnect = findViewById(R.id.swAutoReconnect)
+        valVpnDns = findViewById(R.id.valVpnDns)
+        valVpnMtu = findViewById(R.id.valVpnMtu)
+        valVpnSplitSub = findViewById(R.id.valVpnSplitSub)
+        valSshKeepalive = findViewById(R.id.valSshKeepalive)
+        valConnectTimeout = findViewById(R.id.valConnectTimeout)
+        valDefaultUdpgw = findViewById(R.id.valDefaultUdpgw)
+
+        tvMenuSplitDesc = findViewById(R.id.tvMenuSplitDesc)
         tvSplitModeDesc = findViewById(R.id.tvSplitModeDesc)
         tvSelectedAppsCount = findViewById(R.id.tvSelectedAppsCount)
         btnFilterUserApps = findViewById(R.id.btnFilterUserApps)
         btnFilterAllApps = findViewById(R.id.btnFilterAllApps)
         etSearchApps = findViewById(R.id.etSearchApps)
         lvInstalledApps = findViewById(R.id.lvInstalledApps)
+    }
+
+    private fun setupSettingsInteractions() {
+        val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
+
+        // Menu items di halaman Pengaturan utama
+        findViewById<LinearLayout>(R.id.menuItemVpnBehavior).setOnClickListener { switchNav("settings_vpn") }
+        findViewById<LinearLayout>(R.id.menuItemAutoPing).setOnClickListener { switchNav("settings_autoping") }
+        findViewById<LinearLayout>(R.id.menuItemSplitApps).setOnClickListener { switchNav("settings_apps") }
+        findViewById<LinearLayout>(R.id.menuItemTunnelCore).setOnClickListener { switchNav("settings_tunnel") }
+
+        // Mode chip Auto Ping
+        btnPingModeOff.setOnClickListener {
+            prefs.edit().putString("ping_mode", "off").apply()
+            refreshAllSettingsLabels()
+        }
+        btnPingModeKeepAlive.setOnClickListener {
+            prefs.edit().putString("ping_mode", "keepalive").apply()
+            refreshAllSettingsLabels()
+        }
+        btnPingModeReset.setOnClickListener {
+            prefs.edit().putString("ping_mode", "reset").apply()
+            refreshAllSettingsLabels()
+        }
+        btnPingModeAgresif.setOnClickListener {
+            prefs.edit()
+                .putString("ping_mode", "agresif")
+                .putInt("ping_interval", 2)
+                .putInt("ping_timeout", 3)
+                .putInt("ping_threshold", 2)
+                .apply()
+            refreshAllSettingsLabels()
+        }
+
+        // Collapsible Lanjutan di Auto Ping
+        val hdrAdv = findViewById<LinearLayout>(R.id.hdrPingAdvanced)
+        val bodyAdv = findViewById<LinearLayout>(R.id.bodyPingAdvanced)
+        val arrowAdv = findViewById<TextView>(R.id.arrowPingAdvanced)
+        hdrAdv.setOnClickListener {
+            if (bodyAdv.visibility == View.VISIBLE) {
+                bodyAdv.visibility = View.GONE
+                arrowAdv.text = "⌄"
+            } else {
+                bodyAdv.visibility = View.VISIBLE
+                arrowAdv.text = "⌃"
+            }
+        }
+
+        // Dialog edit setelan lanjutan Auto Ping
+        findViewById<LinearLayout>(R.id.itemPingTarget).setOnClickListener {
+            showTextSettingDialog("Target ping (host:port atau URL)", prefs.getString("ping_target", "1.1.1.1:80") ?: "1.1.1.1:80", false) { v ->
+                if (v.isNotEmpty()) {
+                    prefs.edit().putString("ping_target", v).apply()
+                    refreshAllSettingsLabels()
+                }
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemPingInterval).setOnClickListener {
+            showTextSettingDialog("Interval ping (detik)", prefs.getInt("ping_interval", 5).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(1, 60) ?: return@showTextSettingDialog
+                prefs.edit().putInt("ping_interval", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemPingTimeout).setOnClickListener {
+            showTextSettingDialog("Batas waktu ping (detik)", prefs.getInt("ping_timeout", 5).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(2, 30) ?: return@showTextSettingDialog
+                prefs.edit().putInt("ping_timeout", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemPingThreshold).setOnClickListener {
+            showTextSettingDialog("Ambang kegagalan sebelum reset", prefs.getInt("ping_threshold", 2).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(1, 10) ?: return@showTextSettingDialog
+                prefs.edit().putInt("ping_threshold", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+
+        // Sub-halaman Perilaku VPN
+        swAutoReconnect.isChecked = prefs.getBoolean("auto_reconnect", true)
+        swAutoReconnect.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("auto_reconnect", isChecked).apply()
+        }
+        findViewById<LinearLayout>(R.id.itemVpnDns).setOnClickListener {
+            val cur1 = prefs.getString("vpn_dns1", "8.8.8.8") ?: "8.8.8.8"
+            val cur2 = prefs.getString("vpn_dns2", "1.1.1.1") ?: "1.1.1.1"
+            showTextSettingDialog("DNS VPN (pisahkan koma, misal 8.8.8.8, 1.1.1.1)", "$cur1, $cur2", false) { v ->
+                val parts = v.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                if (parts.isNotEmpty()) {
+                    prefs.edit()
+                        .putString("vpn_dns1", parts[0])
+                        .putString("vpn_dns2", parts.getOrElse(1) { parts[0] })
+                        .apply()
+                    refreshAllSettingsLabels()
+                }
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemVpnMtu).setOnClickListener {
+            showTextSettingDialog("MTU antarmuka TUN (1200-1500)", prefs.getInt("vpn_mtu", 1400).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(1200, 1500) ?: return@showTextSettingDialog
+                prefs.edit().putInt("vpn_mtu", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemVpnToSplitApps).setOnClickListener { switchNav("settings_apps") }
+
+        // Sub-halaman SSH & SlowDNS
+        findViewById<LinearLayout>(R.id.itemSshKeepalive).setOnClickListener {
+            showTextSettingDialog("Interval SSH Keep-alive (detik)", prefs.getInt("ssh_keepalive", 3).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(2, 30) ?: return@showTextSettingDialog
+                prefs.edit().putInt("ssh_keepalive", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemConnectTimeout).setOnClickListener {
+            showTextSettingDialog("Batas waktu koneksi (detik)", prefs.getInt("connect_timeout", 30).toString(), true) { v ->
+                val num = v.toIntOrNull()?.coerceIn(10, 90) ?: return@showTextSettingDialog
+                prefs.edit().putInt("connect_timeout", num).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+        findViewById<LinearLayout>(R.id.itemDefaultUdpgw).setOnClickListener {
+            showTextSettingDialog("Port default BadVPN UDPGW", prefs.getString("default_udpgw", "7300") ?: "7300", true) { v ->
+                val port = v.toIntOrNull()?.coerceIn(1, 65535) ?: return@showTextSettingDialog
+                prefs.edit().putString("default_udpgw", port.toString()).apply()
+                refreshAllSettingsLabels()
+            }
+        }
+
+        // Sub-halaman VPN per aplikasi
+        findViewById<LinearLayout>(R.id.btnSelectSplitMode).setOnClickListener { showSplitModeDialog() }
+        btnClearSelectedApps.setOnClickListener {
+            getSharedPreferences("split_tunnel", MODE_PRIVATE).edit()
+                .putStringSet("packages", emptySet()).apply()
+            refreshAllSettingsLabels()
+            filterInstalledApps()
+            Toast.makeText(this, "Pilihan aplikasi dibersihkan", Toast.LENGTH_SHORT).show()
+        }
+        btnFilterUserApps.setOnClickListener {
+            showSystemApps = false
+            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
+            btnFilterUserApps.setTextColor(Color.parseColor("#E2E8F0"))
+            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
+            btnFilterAllApps.setTextColor(Color.parseColor("#9CA3AF"))
+            filterInstalledApps()
+        }
+        btnFilterAllApps.setOnClickListener {
+            showSystemApps = true
+            btnFilterAllApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3340"))
+            btnFilterAllApps.setTextColor(Color.parseColor("#E2E8F0"))
+            btnFilterUserApps.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#15181E"))
+            btnFilterUserApps.setTextColor(Color.parseColor("#9CA3AF"))
+            filterInstalledApps()
+        }
+        etSearchApps.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { filterInstalledApps() }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+    }
+
+    private fun showTextSettingDialog(title: String, current: String, numeric: Boolean, onSave: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(current)
+            setTextColor(Color.WHITE)
+            setSelection(text.length)
+            if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
+        }
+        val box = FrameLayout(this).apply {
+            setPadding(48, 20, 48, 8)
+            addView(input)
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(title)
+            .setView(box)
+            .setPositiveButton("Simpan") { _, _ -> onSave(input.text.toString().trim()) }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    private fun refreshAllSettingsLabels() {
+        val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
+        val pingMode = prefs.getString("ping_mode", "off") ?: "off"
+        val target = prefs.getString("ping_target", "1.1.1.1:80") ?: "1.1.1.1:80"
+        val interval = prefs.getInt("ping_interval", 5)
+        val timeout = prefs.getInt("ping_timeout", 5)
+        val threshold = prefs.getInt("ping_threshold", 2)
+
+        val chips = listOf(
+            btnPingModeOff to "off",
+            btnPingModeKeepAlive to "keepalive",
+            btnPingModeReset to "reset",
+            btnPingModeAgresif to "agresif"
+        )
+        for ((btn, key) in chips) {
+            if (pingMode == key) {
+                btn.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#2C3545"))
+                btn.setTextColor(Color.WHITE)
+            } else {
+                btn.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#141820"))
+                btn.setTextColor(Color.parseColor("#9CA3AF"))
+            }
+        }
+
+        val modeTitle = when (pingMode) {
+            "keepalive" -> "Keep-alive"
+            "reset" -> "Reset"
+            "agresif" -> "Agresif"
+            else -> "Nonaktif"
+        }
+
+        tvPingModeBanner.text = when (pingMode) {
+            "keepalive" -> "Ping $target tiap $interval detik untuk menjaga jalur tetap hidup tanpa mereset koneksi."
+            "reset" -> "Ping $target tiap $interval detik. Koneksi disambung ulang setelah $threshold kali gagal berturut-turut."
+            "agresif" -> "Mode agresif: Ping $target tiap $interval detik, reset cepat setelah $threshold kali gagal."
+            else -> "Auto Ping nonaktif. Reconnect tetap dipantau otomatis lewat SSH Keep-alive & status jaringan."
+        }
+
+        valPingTarget.text = target
+        valPingInterval.text = "$interval detik"
+        valPingTimeout.text = "$timeout detik"
+        valPingThreshold.text = "$threshold kegagalan"
+
+        tvMenuAutoPingDesc.text = if (pingMode == "off") {
+            "Nonaktif • Hanya pantau SSH Keep-alive & jaringan."
+        } else {
+            "Mode $modeTitle • Ping $target tiap $interval detik."
+        }
+        tvAutoPingSummaryHome.text = if (pingMode == "off") {
+            "Auto Ping: Nonaktif"
+        } else {
+            "Auto Ping: $modeTitle ($target)"
+        }
+
+        val dns1 = prefs.getString("vpn_dns1", "8.8.8.8") ?: "8.8.8.8"
+        val dns2 = prefs.getString("vpn_dns2", "1.1.1.1") ?: "1.1.1.1"
+        val mtu = prefs.getInt("vpn_mtu", 1400)
+        val keepalive = prefs.getInt("ssh_keepalive", 3)
+        val connTimeout = prefs.getInt("connect_timeout", 30)
+        val defUdpgw = prefs.getString("default_udpgw", "7300") ?: "7300"
+
+        valVpnDns.text = "$dns1, $dns2"
+        valVpnMtu.text = mtu.toString()
+        valSshKeepalive.text = "$keepalive detik"
+        valConnectTimeout.text = "$connTimeout detik"
+        valDefaultUdpgw.text = defUdpgw
+
+        updateSplitTunnelLabels()
     }
 
     private fun setupDnsSpinner() {
@@ -409,9 +706,15 @@ class MainActivity : AppCompatActivity() {
         layoutLog.visibility = View.GONE
         layoutProfil.visibility = View.GONE
         layoutProfileEditor.visibility = View.GONE
+        layoutSettingsMenu.visibility = View.GONE
+        layoutSettingsAutoPing.visibility = View.GONE
+        layoutSettingsVpnBehavior.visibility = View.GONE
+        layoutSettingsTunnelCore.visibility = View.GONE
         layoutPengaturan.visibility = View.GONE
+
         btnBackFromEditor.visibility = View.GONE
         btnAddProfileMenu.visibility = View.GONE
+        btnClearSelectedApps.visibility = View.GONE
         btnSaveEditorFab.hide()
 
         when (target) {
@@ -431,7 +734,7 @@ class MainActivity : AppCompatActivity() {
                 pillBeranda.setBackgroundResource(R.drawable.bg_nav_pill)
                 txtNavBeranda.setTextColor(Color.parseColor("#E5E7EB"))
                 refreshActiveProfileHomeCard()
-                updateSplitTunnelLabels()
+                refreshAllSettingsLabels()
             }
             "profil" -> {
                 topBarMain.visibility = View.VISIBLE
@@ -462,8 +765,56 @@ class MainActivity : AppCompatActivity() {
                 txtNavProfil.setTextColor(Color.parseColor("#E5E7EB"))
             }
             "pengaturan" -> {
+                topBarMain.visibility = View.VISIBLE
+                topBarSettings.visibility = View.GONE
+                tvTopTitle.text = "Pengaturan"
+                tvTopTitle.setTextColor(Color.WHITE)
+                tvHeaderStatus.visibility = View.GONE
+                tabLayout.visibility = View.GONE
+                btnConnect.hide()
+                layoutSettingsMenu.visibility = View.VISIBLE
+                pillPengaturan.setBackgroundResource(R.drawable.bg_nav_pill)
+                txtNavPengaturan.setTextColor(Color.parseColor("#E5E7EB"))
+                refreshAllSettingsLabels()
+            }
+            "settings_autoping" -> {
                 topBarMain.visibility = View.GONE
                 topBarSettings.visibility = View.VISIBLE
+                tvSettingsSubTitle.text = "Auto Ping"
+                tabLayout.visibility = View.GONE
+                btnConnect.hide()
+                layoutSettingsAutoPing.visibility = View.VISIBLE
+                pillPengaturan.setBackgroundResource(R.drawable.bg_nav_pill)
+                txtNavPengaturan.setTextColor(Color.parseColor("#E5E7EB"))
+                refreshAllSettingsLabels()
+            }
+            "settings_vpn" -> {
+                topBarMain.visibility = View.GONE
+                topBarSettings.visibility = View.VISIBLE
+                tvSettingsSubTitle.text = "Perilaku VPN"
+                tabLayout.visibility = View.GONE
+                btnConnect.hide()
+                layoutSettingsVpnBehavior.visibility = View.VISIBLE
+                pillPengaturan.setBackgroundResource(R.drawable.bg_nav_pill)
+                txtNavPengaturan.setTextColor(Color.parseColor("#E5E7EB"))
+                refreshAllSettingsLabels()
+            }
+            "settings_tunnel" -> {
+                topBarMain.visibility = View.GONE
+                topBarSettings.visibility = View.VISIBLE
+                tvSettingsSubTitle.text = "SSH & SlowDNS"
+                tabLayout.visibility = View.GONE
+                btnConnect.hide()
+                layoutSettingsTunnelCore.visibility = View.VISIBLE
+                pillPengaturan.setBackgroundResource(R.drawable.bg_nav_pill)
+                txtNavPengaturan.setTextColor(Color.parseColor("#E5E7EB"))
+                refreshAllSettingsLabels()
+            }
+            "settings_apps" -> {
+                topBarMain.visibility = View.GONE
+                topBarSettings.visibility = View.VISIBLE
+                tvSettingsSubTitle.text = "VPN per aplikasi"
+                btnClearSelectedApps.visibility = View.VISIBLE
                 tabLayout.visibility = View.GONE
                 btnConnect.hide()
                 layoutPengaturan.visibility = View.VISIBLE
@@ -492,6 +843,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openProfileEditor(profile: JSONObject?) {
+        val defUdpgw = getSharedPreferences("app_settings", MODE_PRIVATE).getString("default_udpgw", "7300") ?: "7300"
         editorProtocol = profile?.optString("protocol", "SSH") ?: "SSH"
         if (profile == null) {
             editingProfileId = null
@@ -506,7 +858,7 @@ class MainActivity : AppCompatActivity() {
             etSshHostPort.setText("127.0.0.1:22")
             etSshUser.setText("")
             etSshPass.setText("")
-            etUdpgw.setText("7300")
+            etUdpgw.setText(defUdpgw)
         } else {
             editingProfileId = profile.optString("id")
             etEditProfileName.setText(profile.optString("name", "ss"))
@@ -519,7 +871,7 @@ class MainActivity : AppCompatActivity() {
             etSshHostPort.setText(profile.optString("sshHostPort", "127.0.0.1:22"))
             etSshUser.setText(profile.optString("user", ""))
             etSshPass.setText(profile.optString("pass", ""))
-            etUdpgw.setText(profile.optString("udpgw", "7300"))
+            etUdpgw.setText(profile.optString("udpgw", defUdpgw))
         }
         updateEditorChips()
         switchNav("editor")
@@ -900,13 +1252,12 @@ class MainActivity : AppCompatActivity() {
             "include" -> "Hanya aplikasi terpilih"
             else -> "Semua aplikasi"
         }
+        val summary = if (mode == "all") "Semua aplikasi" else "$modeTitle (${selected.size})"
         tvSplitModeDesc.text = modeTitle
         tvSelectedAppsCount.text = "${selected.size} dipilih"
-        tvSplitSummaryHome.text = if (mode == "all") {
-            "VPN per aplikasi: Semua aplikasi"
-        } else {
-            "VPN per aplikasi: $modeTitle (${selected.size})"
-        }
+        tvMenuSplitDesc.text = summary
+        valVpnSplitSub.text = summary
+        tvSplitSummaryHome.text = "VPN per aplikasi: $summary"
     }
 
     private fun loadInstalledAppsAsync() {

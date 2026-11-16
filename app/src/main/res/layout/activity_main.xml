@@ -20,17 +20,16 @@
             android:background="#141820"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="14dp">
 
             <ImageButton
                 android:id="@+id/btnBackFromEditor"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginEnd="10dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_revert"
-                android:visibility="gone"
-                app:tint="#E5E7EB" />
+                android:src="@drawable/ic_arrow_back"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvTopTitle"
@@ -67,7 +66,7 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- TOP BAR PENGATURAN (VPN PER APLIKASI) -->
+        <!-- TOP BAR PENGATURAN (SUB-HALAMAN DENGAN PANAH BACK BERSIH) -->
         <LinearLayout
             android:id="@+id/topBarSettings"
             android:layout_width="match_parent"
@@ -83,15 +82,15 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_revert"
-                app:tint="#E2E8F0" />
+                android:src="@drawable/ic_arrow_back" />
 
             <TextView
+                android:id="@+id/tvSettingsSubTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="VPN per aplikasi"
+                android:text="Pengaturan"
                 android:textColor="#F3F4F6"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -105,7 +104,8 @@
                 android:rotation="45"
                 android:text="+"
                 android:textColor="#E2E8F0"
-                android:textSize="24sp" />
+                android:textSize="24sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- SUB-TABS BERANDA -->
@@ -263,7 +263,6 @@
                             </LinearLayout>
                         </LinearLayout>
 
-                        <!-- STATUS PILL TENGAH -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -283,7 +282,6 @@
                                 android:textSize="11.5sp" />
                         </LinearLayout>
 
-                        <!-- IP LOKAL / INTERFACE -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -380,21 +378,40 @@
                                 android:textSize="13sp"
                                 android:textStyle="bold" />
                         </LinearLayout>
-
-                        <Button
-                            android:id="@+id/btnRefresh"
-                            android:layout_width="match_parent"
-                            android:layout_height="42dp"
-                            android:layout_marginTop="12dp"
-                            android:backgroundTint="#0284C7"
-                            android:text="REFRESH SESI SSH"
-                            android:textColor="#FFFFFF"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:visibility="gone" />
                     </LinearLayout>
 
-                    <!-- KARTU SPLIT TUNNEL RINGKAS -->
+                    <!-- KARTU RINGKAS AUTO PING & SPLIT TUNNEL -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp"
+                        android:background="@drawable/bg_card"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:id="@+id/tvAutoPingSummaryHome"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Auto Ping: Nonaktif"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+
+                        <TextView
+                            android:id="@+id/btnHomeToAutoPing"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="6dp"
+                            android:text="Atur"
+                            android:textColor="#60A5FA"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -427,7 +444,7 @@
                 </LinearLayout>
             </ScrollView>
 
-            <!-- 2. BERANDA: LOG (AUTO-CLEAN 100 BARIS) -->
+            <!-- 2. BERANDA: LOG -->
             <LinearLayout
                 android:id="@+id/layoutLog"
                 android:layout_width="match_parent"
@@ -500,7 +517,6 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical" />
 
-                    <!-- EKSPOR / IMPOR JSON -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -563,7 +579,7 @@
                 </LinearLayout>
             </ScrollView>
 
-            <!-- 4. PROFIL: EDITOR MODULAR COLLAPSIBLE -->
+            <!-- 4. PROFIL: EDITOR MODULAR -->
             <ScrollView
                 android:id="@+id/layoutProfileEditor"
                 android:layout_width="match_parent"
@@ -577,7 +593,6 @@
                     android:orientation="vertical"
                     android:paddingBottom="88dp">
 
-                    <!-- KARTU NAMA PROFIL -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -608,7 +623,6 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- KARTU MODE -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -672,7 +686,6 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- KARTU METODE -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -736,7 +749,6 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- KARTU SLOWDNS (MUNCUL SAAT METODE = SLOWDNS) -->
                     <LinearLayout
                         android:id="@+id/cardSlowDnsSection"
                         android:layout_width="match_parent"
@@ -862,7 +874,6 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- KARTU AKUN SSH & BADVPN -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -1004,7 +1015,690 @@
                 </LinearLayout>
             </ScrollView>
 
-            <!-- 5. PENGATURAN: VPN PER APLIKASI -->
+            <!-- 5A. PENGATURAN: MENU UTAMA -->
+            <ScrollView
+                android:id="@+id/layoutSettingsMenu"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="32dp">
+
+                    <!-- ITEM 1: PERILAKU VPN -->
+                    <LinearLayout
+                        android:id="@+id/menuItemVpnBehavior"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Perilaku VPN"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="DNS VPN, MTU antarmuka TUN, sambung ulang otomatis, dan VPN per aplikasi."
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+
+                    <!-- ITEM 2: AUTO PING -->
+                    <LinearLayout
+                        android:id="@+id/menuItemAutoPing"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Auto Ping"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvMenuAutoPingDesc"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Jaga koneksi tetap hidup dengan ping berkala, dan reset koneksi saat gagal berulang."
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+
+                    <!-- ITEM 3: VPN PER APLIKASI (AKSES CEPAT) -->
+                    <LinearLayout
+                        android:id="@+id/menuItemSplitApps"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="VPN per aplikasi"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvMenuSplitDesc"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Semua aplikasi"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginVertical="10dp"
+                        android:background="#232936" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="4dp"
+                        android:text="Tunnel"
+                        android:textColor="#60A5FA"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <!-- ITEM 4: SSH & SLOWDNS -->
+                    <LinearLayout
+                        android:id="@+id/menuItemTunnelCore"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="SSH &amp; SlowDNS"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Keep-alive SSH, batas waktu jabat tangan, dan port default BadVPN UDPGW."
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- 5B. PENGATURAN -> AUTO PING (PERSIS REFERENSI) -->
+            <ScrollView
+                android:id="@+id/layoutSettingsAutoPing"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="40dp">
+
+                    <!-- 4 TOMBOL CHIP MODE -->
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:scrollbars="none">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/btnPingModeOff"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:layout_marginEnd="8dp"
+                                android:backgroundTint="#1E2532"
+                                android:text="Nonaktif"
+                                android:textAllCaps="false"
+                                android:textColor="#E5E7EB"
+                                android:textSize="12.5sp" />
+
+                            <Button
+                                android:id="@+id/btnPingModeKeepAlive"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:layout_marginEnd="8dp"
+                                android:backgroundTint="#141820"
+                                android:text="Keep-alive"
+                                android:textAllCaps="false"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+
+                            <Button
+                                android:id="@+id/btnPingModeReset"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:layout_marginEnd="8dp"
+                                android:backgroundTint="#141820"
+                                android:text="Reset"
+                                android:textAllCaps="false"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+
+                            <Button
+                                android:id="@+id/btnPingModeAgresif"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:backgroundTint="#141820"
+                                android:text="Agresif"
+                                android:textAllCaps="false"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+                    </HorizontalScrollView>
+
+                    <!-- KARTU RINGKASAN PERILAKU MODE -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:background="@drawable/bg_card"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:id="@+id/tvPingModeBanner"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Auto Ping nonaktif. Reconnect tetap dipantau otomatis lewat SSH Keepalive &amp; status jaringan."
+                            android:textColor="#D1D5DB"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+
+                    <!-- HEADER LANJUTAN -->
+                    <LinearLayout
+                        android:id="@+id/hdrPingAdvanced"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="8dp">
+
+                        <TextView
+                            android:id="@+id/arrowPingAdvanced"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="10dp"
+                            android:text="⌃"
+                            android:textColor="#9CA3AF"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Lanjutan"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="4 setelan"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <!-- ISI SETELAN LANJUTAN AUTO PING -->
+                    <LinearLayout
+                        android:id="@+id/bodyPingAdvanced"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:id="@+id/itemPingTarget"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:orientation="vertical"
+                            android:paddingVertical="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Target ping"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/valPingTarget"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:fontFamily="monospace"
+                                android:text="1.1.1.1:80"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemPingInterval"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:orientation="vertical"
+                            android:paddingVertical="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Interval ping (detik)"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/valPingInterval"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="5 detik"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemPingTimeout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:orientation="vertical"
+                            android:paddingVertical="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Batas waktu ping (detik)"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/valPingTimeout"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="5 detik"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/itemPingThreshold"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:orientation="vertical"
+                            android:paddingVertical="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Ambang kegagalan"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/valPingThreshold"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="2 kegagalan"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- 5C. PENGATURAN -> PERILAKU VPN -->
+            <ScrollView
+                android:id="@+id/layoutSettingsVpnBehavior"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="40dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="12dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sambung ulang otomatis"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Mulai ulang sesi bersih secara otomatis saat SSH terputus atau jaringan berganti."
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <Switch
+                            android:id="@+id/swAutoReconnect"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/itemVpnDns"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="DNS VPN (Utama &amp; Cadangan)"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/valVpnDns"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="monospace"
+                            android:text="8.8.8.8, 1.1.1.1"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/itemVpnMtu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="MTU antarmuka TUN"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/valVpnMtu"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="1400"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/itemVpnToSplitApps"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="VPN per aplikasi"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/valVpnSplitSub"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="Semua aplikasi"
+                                android:textColor="#9CA3AF"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- 5D. PENGATURAN -> SSH & SLOWDNS -->
+            <ScrollView
+                android:id="@+id/layoutSettingsTunnelCore"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="40dp">
+
+                    <LinearLayout
+                        android:id="@+id/itemSshKeepalive"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Interval SSH Keep-alive (detik)"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/valSshKeepalive"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="3 detik"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/itemConnectTimeout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Batas waktu koneksi (detik)"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/valConnectTimeout"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="30 detik"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/itemDefaultUdpgw"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Port default BadVPN UDPGW"
+                            android:textColor="#F3F4F6"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/valDefaultUdpgw"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="monospace"
+                            android:text="7300"
+                            android:textColor="#9CA3AF"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </ScrollView>
+
+            <!-- 5E. PENGATURAN -> VPN PER APLIKASI -->
             <LinearLayout
                 android:id="@+id/layoutPengaturan"
                 android:layout_width="match_parent"

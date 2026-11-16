@@ -493,7 +493,7 @@ func queryDNSOnce(sshClient *ssh.Client, serverIP string, query []byte) ([]byte,
 		return nil, err
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(time.Duration(*keepaliveSec) * time.Second))
 
 	req := make([]byte, 2+len(query))
 	binary.BigEndian.PutUint16(req[:2], uint16(len(query)))
@@ -878,7 +878,7 @@ func main() {
 	}
 
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(time.Duration(*keepaliveSec) * time.Second)
 		defer ticker.Stop()
 		stalledCount := 0
 		for range ticker.C {
