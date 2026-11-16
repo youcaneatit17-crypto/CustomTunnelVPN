@@ -705,7 +705,7 @@ class MainActivity : AppCompatActivity() {
         )
         for ((hdrId, bodyId, arrowId) in pairs) {
             val hdr = findViewById<LinearLayout>(hdrId)
-            val body = findViewById<LinearLayout>(bodyId)
+            val body = findViewById<View>(bodyId)
             val arrow = findViewById<TextView>(arrowId)
             hdr.setOnClickListener {
                 if (body.visibility == View.VISIBLE) {
