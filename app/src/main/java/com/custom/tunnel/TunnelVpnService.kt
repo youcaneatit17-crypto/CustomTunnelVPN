@@ -350,7 +350,12 @@ class TunnelVpnService : VpnService() {
                     } catch (_: Exception) {
                         failCount++
                         if (pingMode == "keepalive") {
-                            TunnelLogger.log("Auto Ping timeout ($targetHost:$targetPort)", "#FFB74D")
+                            TunnelLogger.log("Auto Ping timeout ($targetHost:$targetPort) ($failCount/3)", "#FFB74D")
+                            if (failCount >= 3) {
+                                failCount = 0
+                                TunnelLogger.log("Jalur tidak merespons, menyegarkan sesi SSH...", "#64B5F6")
+                                try { ctrlSockName?.let { s -> LocalSocket().use { ls -> ls.connect(LocalSocketAddress(s, LocalSocketAddress.Namespace.ABSTRACT)); ls.outputStream.write("REFRESH\n".toByteArray()); ls.outputStream.flush() } } } catch (_: Exception) {}
+                            }
                         } else {
                             TunnelLogger.log("Auto Ping gagal ($failCount/$failThreshold)", "#FFB74D")
                             if (failCount >= failThreshold) {

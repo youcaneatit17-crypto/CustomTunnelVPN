@@ -886,6 +886,33 @@ func renderPayloadString(raw, sshAddr string) string {
 }
 
 
+var lastServerRxNs atomic.Int64
+
+type rxTrackConn struct{ net.Conn }
+
+func (c *rxTrackConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	if n > 0 {
+		lastServerRxNs.Store(time.Now().UnixNano())
+	}
+	return n, err
+}
+
+func dialSSHWithTimeout(client *ssh.Client, network, addr string, timeout time.Duration) (net.Conn, error) {
+	type res struct {
+		conn net.Conn
+		err  error
+	}
+	ch := make(chan res, 1)
+	go func() { c, err := client.Dial(network, addr); ch <- res{c, err} }()
+	select {
+	case r := <-ch:
+		return r.conn, r.err
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("SSH channel timeout (%s)", addr)
+	}
+}
+
 type bufferedNetConn struct {
 	net.Conn
 	r *bufio.Reader
@@ -916,7 +943,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 		return nil, fmt.Errorf("gagal koneksi ke %s: %w", dialTarget, err)
 	}
 	if tc, ok := rawConn.(*net.TCPConn); ok {
-		_ = tc.SetNoDelay(true)
+		_ = tc.SetNoDelay(true); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536)
 		_ = tc.SetKeepAlive(true)
 		_ = tc.SetKeepAlivePeriod(45 * time.Second)
 	}
@@ -977,7 +1004,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 			}
 		}
 		_ = conn.SetReadDeadline(time.Time{})
-		return &bufferedNetConn{Conn: conn, r: br}, nil
+		lastServerRxNs.Store(time.Now().UnixNano()); return &rxTrackConn{Conn: &bufferedNetConn{Conn: conn, r: br}}, nil
 	} else if strings.TrimSpace(proxyStr) != "" {
 		connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", sshAddr, sshAddr)
 		if proxyAuth != "" {
@@ -1005,10 +1032,10 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 			}
 		}
 		_ = conn.SetReadDeadline(time.Time{})
-		return &bufferedNetConn{Conn: conn, r: br}, nil
+		lastServerRxNs.Store(time.Now().UnixNano()); return &rxTrackConn{Conn: &bufferedNetConn{Conn: conn, r: br}}, nil
 	}
 
-	return conn, nil
+	lastServerRxNs.Store(time.Now().UnixNano()); return &rxTrackConn{Conn: conn}, nil
 }
 
 func main() {
@@ -1079,25 +1106,21 @@ func main() {
 
 	if strings.TrimSpace(mgr.ns) == "" {
 		go func() {
-			var lastDead *ssh.Client
 			for {
-				time.Sleep(2 * time.Second)
-				if mgr.refreshing.Load() {
+				time.Sleep(3 * time.Second)
+				if mgr.refreshing.Load() || mgr.getClient() == nil || mgr.activeStreams.Load() <= 0 {
 					continue
 				}
-				client := mgr.getClient()
-				if client == nil {
-					continue
-				}
-				if client == lastDead {
-					time.Sleep(3 * time.Second)
-					mgr.refresh("Mencoba menyambung ulang sesi SSH...")
-					continue
-				}
-				_ = client.Wait()
-				lastDead = client
-				if !mgr.refreshing.Load() {
-					mgr.refresh("Koneksi SSH terputus, menyambung ulang...")
+				lastRx := lastServerRxNs.Load()
+				if lastRx > 0 && time.Since(time.Unix(0, lastRx)) > 12*time.Second {
+					done := make(chan error, 1)
+					go func(c *ssh.Client) { _, _, err := c.SendRequest("keepalive@openssh.com", true, nil); done <- err }(mgr.getClient())
+					select {
+					case err := <-done:
+						if err != nil { mgr.refresh("Koneksi Payload/SSH terputus, menyambung ulang...") } else { lastServerRxNs.Store(time.Now().UnixNano()) }
+					case <-time.After(4 * time.Second):
+						mgr.refresh("Jalur Payload/SSH macet (timeout), menyegarkan sesi...")
+					}
 				}
 			}
 		}()
