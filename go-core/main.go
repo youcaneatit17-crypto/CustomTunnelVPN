@@ -988,7 +988,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 				break
 			}
 		}
-		_ = conn.SetReadDeadline(time.Time{})
+		_ = conn.SetDeadline(time.Time{})
 		lastServerRxNs.Store(time.Now().UnixNano()); return &rxTrackConn{Conn: &bufferedNetConn{Conn: conn, r: br}}, nil
 	} else if strings.TrimSpace(proxyStr) != "" {
 		connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", sshAddr, sshAddr)
@@ -1016,7 +1016,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 				break
 			}
 		}
-		_ = conn.SetReadDeadline(time.Time{})
+		_ = conn.SetDeadline(time.Time{})
 		lastServerRxNs.Store(time.Now().UnixNano()); return &rxTrackConn{Conn: &bufferedNetConn{Conn: conn, r: br}}, nil
 	}
 
@@ -1091,21 +1091,22 @@ func main() {
 
 	if strings.TrimSpace(mgr.ns) == "" {
 		go func() {
-			for {
-				time.Sleep(3 * time.Second)
-				if mgr.refreshing.Load() || mgr.getClient() == nil || mgr.activeStreams.Load() <= 0 {
+			for range time.Tick(12 * time.Second) {
+				c := mgr.getClient()
+				if mgr.refreshing.Load() || c == nil || time.Since(time.Unix(0, lastServerRxNs.Load())) < 10*time.Second {
 					continue
 				}
-				lastRx := lastServerRxNs.Load()
-				if lastRx > 0 && time.Since(time.Unix(0, lastRx)) > 12*time.Second {
-					done := make(chan error, 1)
-					go func(c *ssh.Client) { _, _, err := c.SendRequest("keepalive@openssh.com", true, nil); done <- err }(mgr.getClient())
-					select {
-					case err := <-done:
-						if err != nil { mgr.refresh("Koneksi Payload/SSH terputus, menyambung ulang...") } else { lastServerRxNs.Store(time.Now().UnixNano()) }
-					case <-time.After(4 * time.Second):
-						mgr.refresh("Jalur Payload/SSH macet (timeout), menyegarkan sesi...")
+				done := make(chan error, 1)
+				go func() { _, _, err := c.SendRequest("keepalive@openssh.com", true, nil); done <- err }()
+				select {
+				case err := <-done:
+					if err != nil {
+						mgr.refresh("Koneksi terputus, menyambung ulang...")
+					} else {
+						lastServerRxNs.Store(time.Now().UnixNano())
 					}
+				case <-time.After(5 * time.Second):
+					mgr.refresh("Jalur proxy/CDN macet, menyegarkan sesi...")
 				}
 			}
 		}()
@@ -1149,7 +1150,7 @@ func main() {
 	}
 
 	cache := newDNSCache()
-	dialSem := make(chan struct{}, 20)
+	dialSem := make(chan struct{}, 12)
 
 	socksListener, err := net.Listen("tcp", *socksAddr)
 	if err != nil {
