@@ -163,6 +163,9 @@ class MainActivity : AppCompatActivity() {
     private var v2Proto = "vmess"
     private var v2Net = "ws"
     private var v2Tls = false
+    private var v2Alpn = ""
+    private var v2Fp = "chrome"
+    private var v2AllowInsecure = true
     private var editorMethod = "SlowDNS"
     private var usePayloadFlag = false
     private var useTlsFlag = false
@@ -444,6 +447,24 @@ class MainActivity : AppCompatActivity() {
         findViewById<LinearLayout>(R.id.menuItemAutoPing).setOnClickListener { switchNav("settings_autoping") }
         findViewById<LinearLayout>(R.id.menuItemSplitApps).setOnClickListener { switchNav("settings_apps") }
         findViewById<LinearLayout>(R.id.menuItemTunnelCore).setOnClickListener { switchNav("settings_tunnel") }
+        findViewById<LinearLayout>(R.id.menuItemBatteryOpt).setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                    try {
+                        val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    } catch (_: Exception) {
+                        startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    }
+                } else {
+                    Toast.makeText(this, "Optimasi baterai sudah dinonaktifkan", Toast.LENGTH_SHORT).show()
+                    startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+        }
 
         // Mode chip Auto Ping
         btnPingModeOff.setOnClickListener {
@@ -646,6 +667,15 @@ class MainActivity : AppCompatActivity() {
             else -> "Nonaktif"
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val ignoring = pm.isIgnoringBatteryOptimizations(packageName)
+            findViewById<TextView>(R.id.tvMenuBatteryDesc).text = if (ignoring) {
+                "Aktif • Tidak dibatasi (Aman dari pembunuhan latar belakang HyperOS)"
+            } else {
+                "Dibatasi • Ketuk untuk menonaktifkan pembatasan baterai"
+            }
+        }
         tvPingModeBanner.text = when (pingMode) {
             "keepalive" -> "Ping $target tiap $interval detik untuk menjaga jalur tetap hidup tanpa mereset koneksi."
             "reset" -> "Ping $target tiap $interval detik. Koneksi disambung ulang setelah $threshold kali gagal berturut-turut."
@@ -931,10 +961,11 @@ class MainActivity : AppCompatActivity() {
         path = findViewById<EditText>(R.id.etV2RayPath).text.toString().trim(),
         host = findViewById<EditText>(R.id.etV2RayHost).text.toString().trim(),
         tls = v2Tls,
-        sni = findViewById<EditText>(R.id.etV2RaySni).text.toString().trim()
+        sni = findViewById<EditText>(R.id.etV2RaySni).text.toString().trim(), alpn = v2Alpn, fp = v2Fp, allowInsecure = v2AllowInsecure
     )
 
     private fun fillV2RayForm(e: V2RayConfigBuilder.EditableV2Ray) {
+        v2Alpn = e.alpn; v2Fp = e.fp; v2AllowInsecure = e.allowInsecure
         v2Proto = e.protocol.lowercase(); v2Net = e.network.lowercase(); v2Tls = e.tls
         findViewById<EditText>(R.id.etV2RayAddrPort).setText(e.addressPort)
         findViewById<EditText>(R.id.etV2RayUuid).setText(e.uuid)
