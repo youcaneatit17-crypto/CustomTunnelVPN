@@ -508,11 +508,21 @@ class TunnelVpnService : VpnService() {
         coreProcess = null
         if (proc != null) {
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    proc.descendants().forEach { child ->
-                        try { child.destroyForcibly() } catch (_: Exception) {}
+                try {
+                    val pidField = proc.javaClass.getDeclaredField("pid").apply { isAccessible = true }
+                    val parentPid = pidField.getInt(proc)
+                    java.io.File("/proc").listFiles()?.forEach { dir ->
+                        val childPid = dir.name.toIntOrNull() ?: return@forEach
+                        val statFile = java.io.File(dir, "stat")
+                        if (statFile.exists()) {
+                            val stat = statFile.readText()
+                            val ppid = stat.substringAfterLast(") ").split(" ").getOrNull(1)?.toIntOrNull()
+                            if (ppid == parentPid) {
+                                android.os.Process.killProcess(childPid)
+                            }
+                        }
                     }
-                }
+                } catch (_: Exception) {}
                 proc.destroy()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     if (!proc.waitFor(350, TimeUnit.MILLISECONDS)) {
