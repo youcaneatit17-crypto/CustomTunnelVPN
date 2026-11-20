@@ -588,15 +588,15 @@ func relayBidirectional(localConn, remoteConn net.Conn, mgr *tunnelManager) {
 	mgr.activeStreams.Add(1)
 	defer mgr.activeStreams.Add(-1)
 
-	c1 := &trackedConn{Conn: localConn, timeout: 90 * time.Second, onIO: mgr.noteTraffic}
-	c2 := &trackedConn{Conn: remoteConn, timeout: 90 * time.Second, onIO: mgr.noteTraffic}
+	c1 := &trackedConn{Conn: localConn, timeout: 180 * time.Second, onIO: mgr.noteTraffic}
+	c2 := &trackedConn{Conn: remoteConn, timeout: 180 * time.Second, onIO: mgr.noteTraffic}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		buf := make([]byte, 16384)
+		buf := make([]byte, 65536)
 		_, _ = io.CopyBuffer(c2, c1, buf)
 		if cw, ok := remoteConn.(closeWriter); ok {
 			_ = cw.CloseWrite()
@@ -605,7 +605,7 @@ func relayBidirectional(localConn, remoteConn net.Conn, mgr *tunnelManager) {
 
 	go func() {
 		defer wg.Done()
-		buf := make([]byte, 16384)
+		buf := make([]byte, 65536)
 		_, _ = io.CopyBuffer(c1, c2, buf)
 		if cw, ok := localConn.(closeWriter); ok {
 			_ = cw.CloseWrite()
@@ -619,8 +619,8 @@ func handleSocksConn(clientConn net.Conn, mgr *tunnelManager, cache *dnsCache, d
 	defer clientConn.Close()
 	if tcpConn, ok := clientConn.(*net.TCPConn); ok {
 		_ = tcpConn.SetNoDelay(true)
-		_ = tcpConn.SetReadBuffer(32768)
-		_ = tcpConn.SetWriteBuffer(32768)
+		_ = tcpConn.SetReadBuffer(262144)
+		_ = tcpConn.SetWriteBuffer(262144)
 	}
 
 	hdr := make([]byte, 2)
@@ -928,7 +928,7 @@ func dialWithPayloadProxy(sshAddr, proxyStr, payloadStr, sni string, timeout tim
 		return nil, fmt.Errorf("gagal koneksi ke %s: %w", dialTarget, err)
 	}
 	if tc, ok := rawConn.(*net.TCPConn); ok {
-		_ = tc.SetNoDelay(true); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536); _ = tc.SetReadBuffer(65536); _ = tc.SetWriteBuffer(65536)
+		_ = tc.SetNoDelay(true); _ = tc.SetReadBuffer(262144); _ = tc.SetWriteBuffer(262144)
 		_ = tc.SetKeepAlive(true)
 		_ = tc.SetKeepAlivePeriod(45 * time.Second)
 	}
@@ -1061,7 +1061,7 @@ func main() {
 	mgr.mu.Lock()
 	mgr.list = activeList
 	mgr.mu.Unlock()
-	log.Printf("[SSH] Tersambung (%d sesi aktif)! Membuka SOCKS5 + Anti-Bufferbloat...", len(activeList))
+	log.Printf("[SSH] Tersambung (%d sesi aktif)! Membuka SOCKS5 (Full Speed)...", len(activeList))
 
 	if *ctrlSock != "" {
 		ctrlListener, err := listenAbstractUnix(*ctrlSock)
@@ -1091,9 +1091,11 @@ func main() {
 
 	if strings.TrimSpace(mgr.ns) == "" {
 		go func() {
-			for range time.Tick(12 * time.Second) {
+			miss := 0
+			for range time.Tick(15 * time.Second) {
 				c := mgr.getClient()
-				if mgr.refreshing.Load() || c == nil || time.Since(time.Unix(0, lastServerRxNs.Load())) < 10*time.Second {
+				if mgr.refreshing.Load() || mgr.isBusy() || c == nil || time.Since(time.Unix(0, lastServerRxNs.Load())) < 20*time.Second {
+					miss = 0
 					continue
 				}
 				done := make(chan error, 1)
@@ -1101,12 +1103,17 @@ func main() {
 				select {
 				case err := <-done:
 					if err != nil {
-						mgr.refresh("Koneksi terputus, menyambung ulang...")
+						miss++
 					} else {
+						miss = 0
 						lastServerRxNs.Store(time.Now().UnixNano())
 					}
-				case <-time.After(5 * time.Second):
-					mgr.refresh("Jalur proxy/CDN macet, menyegarkan sesi...")
+				case <-time.After(12 * time.Second):
+					miss++
+				}
+				if miss >= 2 {
+					miss = 0
+					mgr.refresh("Koneksi tidak merespons, menyegarkan sesi...")
 				}
 			}
 		}()
@@ -1150,7 +1157,7 @@ func main() {
 	}
 
 	cache := newDNSCache()
-	dialSem := make(chan struct{}, 12)
+	dialSem := make(chan struct{}, 128)
 
 	socksListener, err := net.Listen("tcp", *socksAddr)
 	if err != nil {

@@ -252,6 +252,7 @@ class TunnelVpnService : VpnService() {
             val pfd = vpnInterface ?: Builder().apply {
                 setSession("Custom Tunnel (${config.profileName})")
                 setMtu(vpnMtu)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) { setMetered(false) }
                 addAddress("10.0.0.2", 24)
                 addRoute("0.0.0.0", 0)
                 addDnsServer(dns1)
@@ -323,8 +324,8 @@ class TunnelVpnService : VpnService() {
                     val prefs = getSharedPreferences("app_settings", MODE_PRIVATE)
                     val pingMode = prefs.getString("ping_mode", "off") ?: "off"
                     val intervalSec = prefs.getInt("ping_interval", 5).coerceIn(1, 60)
-                    val timeoutSec = prefs.getInt("ping_timeout", 5).coerceIn(2, 30)
-                    val failThreshold = prefs.getInt("ping_threshold", 2).coerceIn(1, 10)
+                    val timeoutSec = prefs.getInt("ping_timeout", 8).coerceIn(5, 30)
+                    val failThreshold = prefs.getInt("ping_threshold", 4).coerceIn(3, 10)
                     val rawTarget = prefs.getString("ping_target", "1.1.1.1:80") ?: "1.1.1.1:80"
 
                     delay(intervalSec * 1000L)
@@ -351,7 +352,7 @@ class TunnelVpnService : VpnService() {
                         failCount++
                         if (pingMode == "keepalive") {
                             TunnelLogger.log("Auto Ping timeout ($targetHost:$targetPort) ($failCount/3)", "#FFB74D")
-                            if (failCount >= 3) {
+                            if (failCount >= 5) {
                                 failCount = 0
                                 TunnelLogger.log("Jalur tidak merespons, menyegarkan sesi SSH...", "#64B5F6")
                                 try { ctrlSockName?.let { s -> LocalSocket().use { ls -> ls.connect(LocalSocketAddress(s, LocalSocketAddress.Namespace.ABSTRACT)); ls.outputStream.write("REFRESH\n".toByteArray()); ls.outputStream.flush() } } } catch (_: Exception) {}
