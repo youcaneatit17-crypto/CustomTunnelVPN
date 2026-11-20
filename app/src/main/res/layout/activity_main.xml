@@ -1758,6 +1758,49 @@
                             android:textSize="22sp" />
                     </LinearLayout>
 
+                    <!-- ITEM 4: OPTIMASI BATERAI (ANTI-KILL BACKGROUND) -->
+                    <LinearLayout
+                        android:id="@+id/menuItemBatteryOpt"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingVertical="14dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Optimasi Baterai"
+                                android:textColor="#F3F4F6"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvMenuBatteryDesc"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Izinkan aplikasi berjalan di latar belakang tanpa dibatasi sistem."
+                                android:textColor="#9CA3AF"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="#9CA3AF"
+                            android:textSize="22sp" />
+                    </LinearLayout>
+
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"

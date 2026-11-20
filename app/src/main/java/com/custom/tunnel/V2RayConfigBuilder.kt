@@ -224,7 +224,10 @@ object V2RayConfigBuilder {
         val path: String = "/",
         val host: String = "",
         val tls: Boolean = false,
-        val sni: String = ""
+        val sni: String = "",
+        val alpn: String = "",
+        val fp: String = "chrome",
+        val allowInsecure: Boolean = true
     )
 
     fun parseToEditable(rawInput: String): EditableV2Ray {
@@ -290,8 +293,13 @@ object V2RayConfigBuilder {
             ?.ifEmpty { stream.optJSONObject("realitySettings")?.optString("serverName", "") ?: "" }
             ?: ""
 
+        val tlsObj = stream.optJSONObject("tlsSettings") ?: stream.optJSONObject("realitySettings")
+        val alpnArr = tlsObj?.optJSONArray("alpn")
+        val alpnStr = if (alpnArr != null) (0 until alpnArr.length()).mapNotNull { alpnArr.optString(it) }.joinToString(",") else ""
+        val fpStr = tlsObj?.optString("fingerprint", "chrome")?.ifEmpty { "chrome" } ?: "chrome"
+        val allowIns = tlsObj?.optBoolean("allowInsecure", true) ?: true
         val addrPort = if (addr.isNotEmpty()) "$addr:$port" else ""
-        return EditableV2Ray(parsed.remarks, proto, addrPort, uuid, sec, flow, net, path, host, isTls, sni)
+        return EditableV2Ray(parsed.remarks, proto, addrPort, uuid, sec, flow, net, path, host, isTls, sni, alpnStr, fpStr, allowIns)
     }
 
     fun buildOutboundJsonFromEditable(e: EditableV2Ray): String {
@@ -335,7 +343,9 @@ object V2RayConfigBuilder {
         val net = e.network.lowercase()
         val secStr = if (e.tls) "tls" else "none"
         val sniVal = e.sni.trim().ifEmpty { e.host.trim().ifEmpty { hostPart } }
-        outbound.put("streamSettings", buildStreamSettings(net, "none", e.host.trim(), e.path.trim(), secStr, sniVal, "", "chrome", "", ""))
+        val streamObj = buildStreamSettings(net, "none", e.host.trim(), e.path.trim(), secStr, sniVal, e.alpn, e.fp.ifEmpty { "chrome" }, "", "")
+        streamObj.optJSONObject("tlsSettings")?.put("allowInsecure", e.allowInsecure)
+        outbound.put("streamSettings", streamObj)
 
         return JSONObject().put("outbounds", JSONArray().put(outbound)).toString(2)
     }
