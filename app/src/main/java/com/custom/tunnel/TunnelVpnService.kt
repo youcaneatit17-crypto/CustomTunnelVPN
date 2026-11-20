@@ -21,6 +21,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.TimeUnit
 
@@ -195,7 +196,7 @@ class TunnelVpnService : VpnService() {
             val dns2 = appPrefs.getString("vpn_dns2", "1.1.1.1")?.trim().orEmpty().ifEmpty { "1.1.1.1" }
 
             val nativeDir = applicationInfo.nativeLibraryDir
-            val localSocksPort = 1080
+            val localSocksPort = runCatching { ServerSocket(0).use { it.localPort } }.getOrDefault(1080)
             val now = System.currentTimeMillis()
             val tunSockName = "custom_tunnel_fd_$now"
             val controlSock = "custom_tunnel_ctrl_$now"
@@ -213,12 +214,14 @@ class TunnelVpnService : VpnService() {
                 val parsed = V2RayConfigBuilder.build(config.v2rayLink, config.v2rayBug, config.v2rayHost, localSocksPort)
                 val cfgFile = File(cacheDir, "xray_active.json")
                 cfgFile.writeText(parsed.fullConfigJson)
-                arrayOf("$nativeDir/libsshcore.so", "-xraybin", "$nativeDir/libxray.so", "-xraycfg", cfgFile.absolutePath, "-tunbin", "$nativeDir/libtun2socks.so", "-tunsock", tunSockName, "-ctrlsock", controlSock, "-socks", "127.0.0.1:$localSocksPort")
+                arrayOf("$nativeDir/libsshcore.so", "-xraybin", "$nativeDir/libxray.so", "-xraycfg", cfgFile.absolutePath, "-tunbin", "$nativeDir/libtun2socks.so", "-tunsock", tunSockName,
+                    "-mtu", vpnMtu.toString(), "-ctrlsock", controlSock, "-socks", "127.0.0.1:$localSocksPort")
             } else arrayOf(
                 "$nativeDir/libsshcore.so",
                 "-dnstt", "$nativeDir/libdnstt.so",
                 "-tunbin", "$nativeDir/libtun2socks.so",
                 "-tunsock", tunSockName,
+                    "-mtu", vpnMtu.toString(),
                 "-ctrlsock", controlSock,
                 "-dns", config.dns,
                 "-type", config.dnsType,

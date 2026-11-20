@@ -1039,6 +1039,7 @@ func main() {
 	socksAddr := flag.String("socks", "127.0.0.1:1080", "Local SOCKS5 listen address")
 	xrayBin := flag.String("xraybin", "", "Path to libxray.so")
 	xrayCfg := flag.String("xraycfg", "", "Path to Xray JSON config")
+	tunMtu := flag.Int("mtu", 1400, "TUN interface MTU")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -1074,7 +1075,7 @@ func main() {
 		go func() {
 			_ = cmd.Wait()
 			log.Println("[V2Ray] Proses Xray berhenti.")
-			os.Exit(1)
+			_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 		}()
 	} else {
 		mgr = &tunnelManager{
@@ -1234,7 +1235,7 @@ func main() {
 			tunFile := os.NewFile(uintptr(tunFd), "tun0")
 			defer tunFile.Close()
 
-			cmd := exec.Command(*tunBin, "--device", "fd://3", "--proxy", "socks5://"+*socksAddr, "--mtu", "1400", "--loglevel", "error")
+			cmd := exec.Command(*tunBin, "--device", "fd://3", "--proxy", "socks5://"+*socksAddr, "--mtu", strconv.Itoa(*tunMtu), "--loglevel", "error")
 			cmd.ExtraFiles = []*os.File{tunFile}
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -1245,7 +1246,7 @@ func main() {
 			procMu.Lock()
 			tunCmd = cmd
 			procMu.Unlock()
-			log.Println("[TUN] Engine tun2socks aktif (FD 3, MTU 1400)")
+			log.Printf("[TUN] Engine tun2socks aktif (FD 3, MTU %d)\n", *tunMtu)
 			_ = cmd.Wait()
 		}()
 	}

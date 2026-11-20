@@ -142,9 +142,47 @@ object V2RayConfigBuilder {
                 put("listen", "127.0.0.1")
                 put("protocol", "socks")
                 put("settings", JSONObject().put("auth", "noauth").put("udp", true))
+                put("sniffing", JSONObject().apply {
+                    put("enabled", true)
+                    put("destOverride", JSONArray().put("http").put("tls").put("quic"))
+                    put("routeOnly", true)
+                })
             }
         )
         fullConfig.put("inbounds", inbounds)
+
+        val outs = fullConfig.optJSONArray("outbounds") ?: JSONArray().also { fullConfig.put("outbounds", it) }
+        var hasDirect = false
+        for (i in 0 until outs.length()) {
+            if (outs.optJSONObject(i)?.optString("tag") == "direct") hasDirect = true
+        }
+        if (!hasDirect) {
+            outs.put(JSONObject().put("tag", "direct").put("protocol", "freedom"))
+        }
+
+        if (!fullConfig.has("dns")) {
+            fullConfig.put("dns", JSONObject().put("servers", JSONArray().put("1.1.1.1").put("8.8.8.8")))
+        }
+
+        if (!fullConfig.has("routing")) {
+            val lanIps = JSONArray()
+                .put("10.0.0.0/8")
+                .put("172.16.0.0/12")
+                .put("192.168.0.0/16")
+                .put("127.0.0.0/8")
+                .put("169.254.0.0/16")
+                .put("fc00::/7")
+                .put("fe80::/10")
+            val lanRule = JSONObject().apply {
+                put("type", "field")
+                put("ip", lanIps)
+                put("outboundTag", "direct")
+            }
+            fullConfig.put("routing", JSONObject().apply {
+                put("domainStrategy", "AsIs")
+                put("rules", JSONArray().put(lanRule))
+            })
+        }
 
         val firstOutbound = fullConfig.optJSONArray("outbounds")?.optJSONObject(0)
         if (firstOutbound != null) {
