@@ -159,6 +159,10 @@ class MainActivity : AppCompatActivity() {
 
     private var editingProfileId: String? = null
     private var editorProtocol = "SSH"
+    private var v2JsonMode = false
+    private var v2Proto = "vmess"
+    private var v2Net = "ws"
+    private var v2Tls = false
     private var editorMethod = "SlowDNS"
     private var usePayloadFlag = false
     private var useTlsFlag = false
@@ -229,7 +233,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnHomePickProfile).setOnClickListener { showQuickProfileSelector() }
         findViewById<TextView>(R.id.btnHomeEditProfile).setOnClickListener {
             val active = getActiveProfile()
-            if (active != null) openProfileEditor(active) else switchNav("profil")
+            if (active != null) { if (active.optString("protocol").equals("V2Ray", true)) openV2RayEditor(active) else openProfileEditor(active) } else switchNav("profil")
         }
         
         btnModeSingle.setOnClickListener {
@@ -741,6 +745,8 @@ class MainActivity : AppCompatActivity() {
 
         btnBackFromEditor.visibility = View.GONE
         btnAddProfileMenu.visibility = View.GONE
+        findViewById<View>(R.id.btnV2RayPaste).visibility = View.GONE
+        findViewById<View>(R.id.btnV2RayToggleJson).visibility = View.GONE
         btnClearSelectedApps.visibility = View.GONE
         btnSaveEditorFab.hide()
 
@@ -785,6 +791,10 @@ class MainActivity : AppCompatActivity() {
                 btnBackFromEditor.visibility = View.VISIBLE
                 ivBrandLogo.visibility = View.GONE
                 tvTopTitle.text = editorProtocol
+                if (editorProtocol == "V2Ray") {
+                    findViewById<View>(R.id.btnV2RayPaste).visibility = View.VISIBLE
+                    findViewById<View>(R.id.btnV2RayToggleJson).visibility = View.VISIBLE
+                }
                 tvTopTitle.setTextColor(Color.WHITE)
                 tvHeaderStatus.visibility = View.GONE
                 tabLayout.visibility = View.GONE
@@ -873,62 +883,147 @@ class MainActivity : AppCompatActivity() {
         popup.show()
     }
 
-    private fun openV2RayEditor(profile: JSONObject?) {
-        val defaultName = "v2ray${getProfilesArray().length() + 1}"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 32, 48, 16) }
-        fun makeInput(h: String, init: String, multi: Boolean = false) = EditText(this).apply {
-            hint = h; setText(init); setTextColor(Color.WHITE); setHintTextColor(Color.parseColor("#9CA3AF"))
-            textSize = 13.5f; setBackgroundResource(R.drawable.bg_input); setPadding(28, 22, 28, 22)
-            if (multi) { minLines = 3; maxLines = 5; gravity = Gravity.TOP or Gravity.START } else isSingleLine = true
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 20 }
+    private fun setV2RayEditorVisibility(isV2: Boolean) {
+        (findViewById<View>(R.id.hdrCardMode).parent as View).visibility = if (isV2) View.GONE else View.VISIBLE
+        cardPayloadSection.visibility = if (!isV2 && usePayloadFlag) View.VISIBLE else View.GONE
+        cardTlsSection.visibility = if (!isV2 && useTlsFlag) View.VISIBLE else View.GONE
+        cardSlowDnsSection.visibility = if (!isV2 && useSlowDnsFlag) View.VISIBLE else View.GONE
+        (findViewById<View>(R.id.hdrCardSsh).parent as View).visibility = if (isV2) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.layoutV2RayContainer).visibility = if (isV2) View.VISIBLE else View.GONE
+    }
+
+    private fun refreshV2RayChips() {
+        fun style(id: Int, active: Boolean, label: String) {
+            val b = findViewById<Button>(id)
+            b.text = if (active) "✓ $label" else label
+            b.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (active) "#2C3545" else "#161B24"))
+            b.setTextColor(if (active) Color.WHITE else Color.parseColor("#9CA3AF"))
         }
-        val etName = makeInput("Nama Profil", profile?.optString("name", defaultName) ?: defaultName)
-        val etLink = makeInput("Link vmess://, vless://, trojan://, ss:// atau JSON", profile?.optString("v2rayLink", "") ?: "", true)
-        val etBug = makeInput("Bug / Server IP Opsional", profile?.optString("v2rayBug", "") ?: "")
-        val etHost = makeInput("Custom Host / SNI Opsional", profile?.optString("v2rayHost", "") ?: "")
-        val btnPaste = Button(this).apply {
-            text = "Tempel Link dari Clipboard"; setTextColor(Color.WHITE); textSize = 12f; isAllCaps = false; setBackgroundResource(R.drawable.bg_nav_pill)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 20 }
-            setOnClickListener {
-                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = cb.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString()?.trim().orEmpty()
-                if (clip.isNotEmpty()) {
-                    etLink.setText(clip)
-                    runCatching { V2RayConfigBuilder.build(clip) }.onSuccess { p ->
-                        if (etName.text.toString().trim().startsWith("v2ray") && p.remarks != "V2Ray") etName.setText(p.remarks)
-                    }
-                }
-            }
+        style(R.id.btnV2ProtoVmess, v2Proto == "vmess", "VMess")
+        style(R.id.btnV2ProtoVless, v2Proto == "vless", "VLESS")
+        style(R.id.btnV2ProtoTrojan, v2Proto == "trojan", "Trojan")
+        style(R.id.btnV2ProtoSs, v2Proto == "shadowsocks", "Shadowsocks")
+        style(R.id.btnV2NetWs, v2Net == "ws", "WebSocket")
+        style(R.id.btnV2NetTcp, v2Net == "tcp", "TCP")
+        style(R.id.btnV2NetHu, v2Net == "httpupgrade", "HTTPUpgrade")
+        style(R.id.btnV2NetXhttp, v2Net == "xhttp", "XHTTP")
+        style(R.id.btnV2NetGrpc, v2Net == "grpc", "gRPC")
+        val btnTls = findViewById<Button>(R.id.btnV2RayTlsToggle)
+        btnTls.text = if (v2Tls) "✓ TLS: On" else "TLS: Off"
+        btnTls.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (v2Tls) "#2C3545" else "#161B24"))
+        btnTls.setTextColor(if (v2Tls) Color.WHITE else Color.parseColor("#9CA3AF"))
+        findViewById<TextView>(R.id.tvV2RayUuidLabel).text = if (v2Proto == "trojan" || v2Proto == "shadowsocks") "Password" else "UUID"
+    }
+
+    private fun updateJsonLineNumbers(text: String) {
+        val lines = text.split("\n").size.coerceAtLeast(1)
+        findViewById<TextView>(R.id.tvJsonLineNumbers).text = (1..lines).joinToString("\n") { String.format("%2d |", it) }
+    }
+
+    private fun readV2RayFormEditable() = V2RayConfigBuilder.EditableV2Ray(
+        remarks = etEditProfileName.text.toString().trim().ifEmpty { "V2Ray" },
+        protocol = v2Proto,
+        addressPort = findViewById<EditText>(R.id.etV2RayAddrPort).text.toString().trim(),
+        uuid = findViewById<EditText>(R.id.etV2RayUuid).text.toString().trim(),
+        security = findViewById<Spinner>(R.id.spV2RaySecurity).selectedItem?.toString() ?: "auto",
+        flow = findViewById<EditText>(R.id.etV2RayFlow).text.toString().trim(),
+        network = v2Net,
+        path = findViewById<EditText>(R.id.etV2RayPath).text.toString().trim(),
+        host = findViewById<EditText>(R.id.etV2RayHost).text.toString().trim(),
+        tls = v2Tls,
+        sni = findViewById<EditText>(R.id.etV2RaySni).text.toString().trim()
+    )
+
+    private fun fillV2RayForm(e: V2RayConfigBuilder.EditableV2Ray) {
+        v2Proto = e.protocol.lowercase(); v2Net = e.network.lowercase(); v2Tls = e.tls
+        findViewById<EditText>(R.id.etV2RayAddrPort).setText(e.addressPort)
+        findViewById<EditText>(R.id.etV2RayUuid).setText(e.uuid)
+        findViewById<EditText>(R.id.etV2RayFlow).setText(e.flow)
+        findViewById<EditText>(R.id.etV2RayPath).setText(e.path)
+        findViewById<EditText>(R.id.etV2RayHost).setText(e.host)
+        findViewById<EditText>(R.id.etV2RaySni).setText(e.sni)
+        val sp = findViewById<Spinner>(R.id.spV2RaySecurity)
+        val opts = listOf("auto", "aes-128-gcm", "chacha20-poly1305", "none", "zero", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm")
+        sp.setSelection(opts.indexOfFirst { it.equals(e.security, true) }.coerceAtLeast(0))
+        refreshV2RayChips()
+    }
+
+    private fun setupV2RayEditorListeners() {
+        val sp = findViewById<Spinner>(R.id.spV2RaySecurity)
+        if (sp.adapter == null) {
+            val opts = arrayOf("auto", "aes-128-gcm", "chacha20-poly1305", "none", "zero", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm")
+            sp.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, opts)
         }
-        root.addView(etName); root.addView(btnPaste); root.addView(etLink); root.addView(etBug); root.addView(etHost)
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle(if (profile == null) "Tambah Profil V2Ray" else "Edit Profil V2Ray")
-            .setView(android.widget.ScrollView(this).apply { addView(root) })
-            .setPositiveButton("Simpan") { _, _ ->
-                val rawLink = etLink.text.toString().trim()
-                val bug = etBug.text.toString().trim()
-                val host = etHost.text.toString().trim()
+        findViewById<Button>(R.id.btnV2ProtoVmess).setOnClickListener { v2Proto = "vmess"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2ProtoVless).setOnClickListener { v2Proto = "vless"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2ProtoTrojan).setOnClickListener { v2Proto = "trojan"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2ProtoSs).setOnClickListener { v2Proto = "shadowsocks"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2NetWs).setOnClickListener { v2Net = "ws"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2NetTcp).setOnClickListener { v2Net = "tcp"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2NetHu).setOnClickListener { v2Net = "httpupgrade"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2NetXhttp).setOnClickListener { v2Net = "xhttp"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2NetGrpc).setOnClickListener { v2Net = "grpc"; refreshV2RayChips() }
+        findViewById<Button>(R.id.btnV2RayTlsToggle).setOnClickListener { v2Tls = !v2Tls; refreshV2RayChips() }
+
+        val etJson = findViewById<EditText>(R.id.etV2RayJsonEditor)
+        etJson.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { updateJsonLineNumbers(s?.toString() ?: "") }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        findViewById<View>(R.id.btnV2RayPaste).setOnClickListener {
+            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = cb.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()?.trim().orEmpty()
+            if (clip.isEmpty()) { Toast.makeText(this, "Clipboard kosong", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            try {
+                val ed = V2RayConfigBuilder.parseToEditable(clip)
+                fillV2RayForm(ed)
+                if (etEditProfileName.text.toString().trim().startsWith("v2ray") && ed.remarks != "V2Ray") etEditProfileName.setText(ed.remarks)
+                val jStr = V2RayConfigBuilder.buildOutboundJsonFromEditable(ed)
+                etJson.setText(jStr); updateJsonLineNumbers(jStr)
+                Toast.makeText(this, "Akun V2Ray ditempel!", Toast.LENGTH_SHORT).show()
+            } catch (ex: Exception) { Toast.makeText(this, "Format tidak dikenali: ${ex.message}", Toast.LENGTH_SHORT).show() }
+        }
+
+        findViewById<View>(R.id.btnV2RayToggleJson).setOnClickListener {
+            val formBox = findViewById<View>(R.id.layoutV2RayFormMode)
+            val jsonBox = findViewById<View>(R.id.layoutV2RayJsonMode)
+            if (!v2JsonMode) {
+                val jStr = V2RayConfigBuilder.buildOutboundJsonFromEditable(readV2RayFormEditable())
+                etJson.setText(jStr); updateJsonLineNumbers(jStr)
+                formBox.visibility = View.GONE; jsonBox.visibility = View.VISIBLE; v2JsonMode = true
+            } else {
                 try {
-                    val parsed = V2RayConfigBuilder.build(rawLink, bug, host)
-                    val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
-                    val curArr = getProfilesArray()
-                    val id = profile?.optString("id")?.takeIf { it.isNotEmpty() } ?: System.currentTimeMillis().toString()
-                    val finalName = etName.text.toString().trim().ifEmpty { parsed.remarks }
-                    val obj = JSONObject().put("id", id).put("protocol", "V2Ray").put("name", finalName).put("method", parsed.summaryMethod).put("v2rayLink", rawLink).put("v2rayBug", bug).put("v2rayHost", host)
-                    val updated = JSONArray(); var replaced = false
-                    for (i in 0 until curArr.length()) {
-                        val cur = curArr.getJSONObject(i)
-                        if (cur.optString("id") == id) { updated.put(obj); replaced = true } else updated.put(cur)
-                    }
-                    val finalArr = if (replaced) updated else JSONArray().apply { put(obj); for (i in 0 until updated.length()) put(updated.getJSONObject(i)) }
-                    prefs.edit().putString("list", finalArr.toString()).putString("active_id", id).apply()
-                    refreshActiveProfileHomeCard(); renderProfilesList()
-                    Toast.makeText(this, "Profil V2Ray '$finalName' disimpan!", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                }
+                    fillV2RayForm(V2RayConfigBuilder.parseToEditable(etJson.text.toString()))
+                    jsonBox.visibility = View.GONE; formBox.visibility = View.VISIBLE; v2JsonMode = false
+                } catch (ex: Exception) { Toast.makeText(this, "JSON tidak valid: ${ex.message}", Toast.LENGTH_SHORT).show() }
             }
-            .setNegativeButton("Batal", null).show()
+        }
+    }
+
+    private fun openV2RayEditor(profile: JSONObject?) {
+        setupV2RayEditorListeners()
+        editorProtocol = "V2Ray"; v2JsonMode = false
+        findViewById<View>(R.id.layoutV2RayFormMode).visibility = View.VISIBLE
+        findViewById<View>(R.id.layoutV2RayJsonMode).visibility = View.GONE
+        if (profile == null) {
+            editingProfileId = null
+            etEditProfileName.setText("v2ray${getProfilesArray().length() + 1}")
+            fillV2RayForm(V2RayConfigBuilder.EditableV2Ray())
+        } else {
+            editingProfileId = profile.optString("id")
+            etEditProfileName.setText(profile.optString("name", "V2Ray"))
+            val ed = runCatching {
+                val built = V2RayConfigBuilder.build(profile.optString("v2rayLink", ""), profile.optString("v2rayBug", ""), profile.optString("v2rayHost", ""))
+                V2RayConfigBuilder.parseToEditable(built.fullConfigJson)
+            }.getOrDefault(V2RayConfigBuilder.EditableV2Ray())
+            fillV2RayForm(ed)
+            val jStr = V2RayConfigBuilder.buildOutboundJsonFromEditable(ed)
+            findViewById<EditText>(R.id.etV2RayJsonEditor).setText(jStr); updateJsonLineNumbers(jStr)
+        }
+        setV2RayEditorVisibility(true)
+        switchNav("editor")
     }
 
     private fun openProfileEditor(profile: JSONObject?) {
@@ -975,6 +1070,7 @@ class MainActivity : AppCompatActivity() {
             etSshPass.setText(profile.optString("pass", ""))
             etUdpgw.setText(profile.optString("udpgw", defUdpgw))
         }
+        setV2RayEditorVisibility(false)
         updateEditorChips()
         switchNav("editor")
     }
@@ -1018,6 +1114,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveEditorProfile() {
+        if (editorProtocol == "V2Ray") {
+            try {
+                val finalJson = if (v2JsonMode) findViewById<EditText>(R.id.etV2RayJsonEditor).text.toString().trim() else V2RayConfigBuilder.buildOutboundJsonFromEditable(readV2RayFormEditable())
+                val parsed = V2RayConfigBuilder.build(finalJson)
+                val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+                val arr = getProfilesArray()
+                val id = editingProfileId ?: System.currentTimeMillis().toString()
+                val name = etEditProfileName.text.toString().trim().ifEmpty { parsed.remarks }
+                val obj = JSONObject().put("id", id).put("protocol", "V2Ray").put("name", name).put("method", parsed.summaryMethod).put("v2rayLink", finalJson).put("v2rayBug", "").put("v2rayHost", "")
+                val updated = JSONArray(); var replaced = false
+                for (i in 0 until arr.length()) { val cur = arr.getJSONObject(i); if (cur.optString("id") == id) { updated.put(obj); replaced = true } else updated.put(cur) }
+                val finalArr = if (replaced) updated else JSONArray().apply { put(obj); for (i in 0 until updated.length()) put(updated.getJSONObject(i)) }
+                prefs.edit().putString("list", finalArr.toString()).putString("active_id", id).apply()
+                Toast.makeText(this, "Profil '$name' disimpan & aktif", Toast.LENGTH_SHORT).show()
+                switchNav("profil")
+            } catch (ex: Exception) { Toast.makeText(this, "Error V2Ray: ${ex.message}", Toast.LENGTH_LONG).show() }
+            return
+        }
         val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
         val arr = getProfilesArray()
         val id = editingProfileId ?: System.currentTimeMillis().toString()
