@@ -1214,6 +1214,7 @@ func main() {
 	}
 
 	var tunListener *net.UnixListener
+	var err error
 	if *tunSock != "" && *tunBin != "" {
 		tunListener, err = listenAbstractUnix(*tunSock)
 		if err != nil {
