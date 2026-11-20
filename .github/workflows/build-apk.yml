@@ -39,6 +39,12 @@ jobs:
           cd /tmp/tun2socks
           GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libtun2socks.so
 
+          # 3. Download Xray-core Android arm64 (libxray.so)
+          curl -L --fail -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-android-arm64-v8a.zip
+          unzip -o /tmp/xray.zip xray -d /tmp/xray_extract
+          mv /tmp/xray_extract/xray $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libxray.so
+          chmod +x $GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libxray.so
+
       - name: Generate Gradle Wrapper & Build Debug APK
         run: |
           cd $GITHUB_WORKSPACE

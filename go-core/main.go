@@ -1037,31 +1037,66 @@ func main() {
 	pass := flag.String("pass", "", "SSH Password")
 	sessions := flag.Int("sessions", 2, "Number of parallel SlowDNS+SSH sessions")
 	socksAddr := flag.String("socks", "127.0.0.1:1080", "Local SOCKS5 listen address")
+	xrayBin := flag.String("xraybin", "", "Path to libxray.so")
+	xrayCfg := flag.String("xraycfg", "", "Path to Xray JSON config")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
 	log.SetFlags(0)
 
-	mgr := &tunnelManager{
-		dnsttBin: *dnsttBin,
-		dns:      *dns,
-		dnsType:  *dnsType,
-		ns:       *ns,
-		pubkey:   *pubkey,
-		sshAddr:  *sshAddr,
-		user:     *user,
-		pass:     *pass,
-		sessions: *sessions,
-	}
+	var mgr *tunnelManager
+	var xrayCmd *exec.Cmd
 
-	activeList, err := mgr.dialAllSessions()
-	if err != nil {
-		log.Fatalf("[Core] %v", err)
+	if *xrayBin != "" && *xrayCfg != "" {
+		cmd := exec.Command(*xrayBin, "run", "-c", *xrayCfg)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			log.Fatalf("[V2Ray] Gagal menjalankan Xray-core: %v", err)
+		}
+		xrayCmd = cmd
+		log.Printf("[V2Ray] Xray-core dimulai, menunggu SOCKS5 %s...", *socksAddr)
+		ready := false
+		for i := 0; i < 60; i++ {
+			c, err := net.DialTimeout("tcp", *socksAddr, 100*time.Millisecond)
+			if err == nil {
+				_ = c.Close()
+				ready = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if !ready {
+			_ = cmd.Process.Kill()
+			log.Fatalf("[V2Ray] Timeout menunggu SOCKS5 di %s", *socksAddr)
+		}
+		log.Println("[V2Ray] Tersambung! Membuka bridge TUN...")
+		go func() {
+			_ = cmd.Wait()
+			log.Println("[V2Ray] Proses Xray berhenti.")
+			os.Exit(1)
+		}()
+	} else {
+		mgr = &tunnelManager{
+			dnsttBin: *dnsttBin,
+			dns:      *dns,
+			dnsType:  *dnsType,
+			ns:       *ns,
+			pubkey:   *pubkey,
+			sshAddr:  *sshAddr,
+			user:     *user,
+			pass:     *pass,
+			sessions: *sessions,
+		}
+		activeList, err := mgr.dialAllSessions()
+		if err != nil {
+			log.Fatalf("[Core] %v", err)
+		}
+		mgr.mu.Lock()
+		mgr.list = activeList
+		mgr.mu.Unlock()
+		log.Printf("[SSH] Tersambung (%d sesi aktif)! Membuka SOCKS5 (Full Speed)...", len(activeList))
 	}
-	mgr.mu.Lock()
-	mgr.list = activeList
-	mgr.mu.Unlock()
-	log.Printf("[SSH] Tersambung (%d sesi aktif)! Membuka SOCKS5 (Full Speed)...", len(activeList))
 
 	if *ctrlSock != "" {
 		ctrlListener, err := listenAbstractUnix(*ctrlSock)
@@ -1077,6 +1112,7 @@ func main() {
 						defer c.Close()
 						line, _ := bufio.NewReader(c).ReadString('\n')
 						if strings.TrimSpace(line) == "REFRESH" {
+									if mgr == nil { os.Exit(0) }
 							if strings.TrimSpace(mgr.ns) != "" {
 						mgr.refresh("Menyegarkan port UDP SlowDNS & sesi SSH...")
 					} else {
@@ -1089,7 +1125,7 @@ func main() {
 		}
 	}
 
-	if strings.TrimSpace(mgr.ns) == "" {
+	if mgr != nil && strings.TrimSpace(mgr.ns) == "" {
 		go func() {
 			miss := 0
 			for range time.Tick(15 * time.Second) {
@@ -1117,7 +1153,7 @@ func main() {
 				}
 			}
 		}()
-	} else {
+	} else if mgr != nil {
 		go func() {
 			ticker := time.NewTicker(time.Duration(*keepaliveSec) * time.Second)
 			defer ticker.Stop()
@@ -1159,7 +1195,10 @@ func main() {
 	cache := newDNSCache()
 	dialSem := make(chan struct{}, 128)
 
-	socksListener, err := net.Listen("tcp", *socksAddr)
+	var socksListener net.Listener
+	if mgr != nil {
+		var err error
+		socksListener, err = net.Listen("tcp", *socksAddr)
 	if err != nil {
 		log.Fatalf("[SOCKS5] Gagal listen di %s: %v", *socksAddr, err)
 	}
@@ -1172,6 +1211,7 @@ func main() {
 			go handleSocksConn(conn, mgr, cache, dialSem)
 		}
 	}()
+	}
 
 	var tunListener *net.UnixListener
 	if *tunSock != "" && *tunBin != "" {
@@ -1215,11 +1255,12 @@ func main() {
 	fmt.Println("READY_CONNECTED")
 
 	<-sigCh
-	_ = socksListener.Close()
+	if socksListener != nil { _ = socksListener.Close() }
 	procMu.Lock()
 	if tunCmd != nil && tunCmd.Process != nil {
 		_ = tunCmd.Process.Kill()
 	}
 	procMu.Unlock()
-	mgr.closeAll()
+	if xrayCmd != nil && xrayCmd.Process != nil { _ = xrayCmd.Process.Kill() }
+	if mgr != nil { mgr.closeAll() }
 }

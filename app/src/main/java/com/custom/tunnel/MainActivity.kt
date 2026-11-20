@@ -860,17 +860,75 @@ class MainActivity : AppCompatActivity() {
     private fun showAddProtocolPopup(anchor: View) {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "S   SSH")
-        popup.menu.add(0, 2, 1, "V   V2Ray (Segera)")
+        popup.menu.add(0, 2, 1, "V   V2Ray")
         popup.menu.add(0, 3, 2, "U   UDP Custom (Segera)")
         popup.setOnMenuItemClickListener { item ->
-            if (item.itemId == 1) {
-                openProfileEditor(null)
-            } else {
-                Toast.makeText(this, "Protokol ${item.title.toString().trim()} siap ditambahkan berikutnya", Toast.LENGTH_SHORT).show()
+            when (item.itemId) {
+                1 -> openProfileEditor(null)
+                2 -> openV2RayEditor(null)
+                else -> Toast.makeText(this, "Protokol ${item.title.toString().trim()} siap ditambahkan berikutnya", Toast.LENGTH_SHORT).show()
             }
             true
         }
         popup.show()
+    }
+
+    private fun openV2RayEditor(profile: JSONObject?) {
+        val defaultName = "v2ray${getProfilesArray().length() + 1}"
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 32, 48, 16) }
+        fun makeInput(h: String, init: String, multi: Boolean = false) = EditText(this).apply {
+            hint = h; setText(init); setTextColor(Color.WHITE); setHintTextColor(Color.parseColor("#9CA3AF"))
+            textSize = 13.5f; setBackgroundResource(R.drawable.bg_input); setPadding(28, 22, 28, 22)
+            if (multi) { minLines = 3; maxLines = 5; gravity = Gravity.TOP or Gravity.START } else isSingleLine = true
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 20 }
+        }
+        val etName = makeInput("Nama Profil", profile?.optString("name", defaultName) ?: defaultName)
+        val etLink = makeInput("Link vmess://, vless://, trojan://, ss:// atau JSON", profile?.optString("v2rayLink", "") ?: "", true)
+        val etBug = makeInput("Bug / Server IP Opsional", profile?.optString("v2rayBug", "") ?: "")
+        val etHost = makeInput("Custom Host / SNI Opsional", profile?.optString("v2rayHost", "") ?: "")
+        val btnPaste = Button(this).apply {
+            text = "Tempel Link dari Clipboard"; setTextColor(Color.WHITE); textSize = 12f; isAllCaps = false; setBackgroundResource(R.drawable.bg_nav_pill)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 20 }
+            setOnClickListener {
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = cb.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString()?.trim().orEmpty()
+                if (clip.isNotEmpty()) {
+                    etLink.setText(clip)
+                    runCatching { V2RayConfigBuilder.build(clip) }.onSuccess { p ->
+                        if (etName.text.toString().trim().startsWith("v2ray") && p.remarks != "V2Ray") etName.setText(p.remarks)
+                    }
+                }
+            }
+        }
+        root.addView(etName); root.addView(btnPaste); root.addView(etLink); root.addView(etBug); root.addView(etHost)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(if (profile == null) "Tambah Profil V2Ray" else "Edit Profil V2Ray")
+            .setView(android.widget.ScrollView(this).apply { addView(root) })
+            .setPositiveButton("Simpan") { _, _ ->
+                val rawLink = etLink.text.toString().trim()
+                val bug = etBug.text.toString().trim()
+                val host = etHost.text.toString().trim()
+                try {
+                    val parsed = V2RayConfigBuilder.build(rawLink, bug, host)
+                    val prefs = getSharedPreferences("tunnel_profiles", MODE_PRIVATE)
+                    val curArr = getProfilesArray()
+                    val id = profile?.optString("id")?.takeIf { it.isNotEmpty() } ?: System.currentTimeMillis().toString()
+                    val finalName = etName.text.toString().trim().ifEmpty { parsed.remarks }
+                    val obj = JSONObject().put("id", id).put("protocol", "V2Ray").put("name", finalName).put("method", parsed.summaryMethod).put("v2rayLink", rawLink).put("v2rayBug", bug).put("v2rayHost", host)
+                    val updated = JSONArray(); var replaced = false
+                    for (i in 0 until curArr.length()) {
+                        val cur = curArr.getJSONObject(i)
+                        if (cur.optString("id") == id) { updated.put(obj); replaced = true } else updated.put(cur)
+                    }
+                    val finalArr = if (replaced) updated else JSONArray().apply { put(obj); for (i in 0 until updated.length()) put(updated.getJSONObject(i)) }
+                    prefs.edit().putString("list", finalArr.toString()).putString("active_id", id).apply()
+                    refreshActiveProfileHomeCard(); renderProfilesList()
+                    Toast.makeText(this, "Profil V2Ray '$finalName' disimpan!", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Batal", null).show()
     }
 
     private fun openProfileEditor(profile: JSONObject?) {
@@ -1199,7 +1257,7 @@ class MainActivity : AppCompatActivity() {
                 setImageResource(R.drawable.ic_action_edit)
                 setBackgroundColor(Color.TRANSPARENT)
                 setPadding(18, 18, 18, 18)
-                setOnClickListener { openProfileEditor(item) }
+                setOnClickListener { if (proto.equals("V2Ray", true)) openV2RayEditor(item) else openProfileEditor(item) }
             }
 
             val btnDel = ImageButton(this).apply {
@@ -1456,6 +1514,10 @@ class MainActivity : AppCompatActivity() {
             putExtra("user", active.optString("user", ""))
             putExtra("pass", active.optString("pass", ""))
             putExtra("udpgw", active.optString("udpgw", "7300"))
+            putExtra("protocol", active.optString("protocol", "SSH"))
+            putExtra("v2rayLink", active.optString("v2rayLink", ""))
+            putExtra("v2rayBug", active.optString("v2rayBug", ""))
+            putExtra("v2rayHost", active.optString("v2rayHost", ""))
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

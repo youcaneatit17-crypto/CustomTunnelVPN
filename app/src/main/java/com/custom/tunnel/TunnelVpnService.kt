@@ -17,6 +17,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -52,7 +53,11 @@ class TunnelVpnService : VpnService() {
         val user: String,
         val pass: String,
         val sessions: Int,
-        val udpgwPort: String
+        val udpgwPort: String,
+        val protocol: String = "SSH",
+        val v2rayLink: String = "",
+        val v2rayBug: String = "",
+        val v2rayHost: String = ""
     )
 
     companion object {
@@ -105,7 +110,11 @@ class TunnelVpnService : VpnService() {
             user = intent?.getStringExtra("user") ?: "",
             pass = intent?.getStringExtra("pass") ?: "",
             sessions = intent?.getIntExtra("sessions", 1) ?: 1,
-            udpgwPort = (intent?.getStringExtra("udpgw") ?: "").ifEmpty { defaultUdpgw }
+            udpgwPort = (intent?.getStringExtra("udpgw") ?: "").ifEmpty { defaultUdpgw },
+            protocol = intent?.getStringExtra("protocol") ?: "SSH",
+            v2rayLink = intent?.getStringExtra("v2rayLink") ?: "",
+            v2rayBug = intent?.getStringExtra("v2rayBug") ?: "",
+            v2rayHost = intent?.getStringExtra("v2rayHost") ?: ""
         )
         lastConfig = config
 
@@ -193,9 +202,19 @@ class TunnelVpnService : VpnService() {
             ctrlSockName = controlSock
             val connectedDeferred = CompletableDeferred<Boolean>()
 
-            TunnelLogger.log("Profil: ${config.profileName} | Metode: ${config.method} (${config.sessions} sesi)", "#64B5F6")
+            val isV2Ray = config.protocol.equals("V2Ray", ignoreCase = true)
+            if (isV2Ray) {
+                TunnelLogger.log("Profil: ${config.profileName} | Protokol: V2Ray (${config.method})", "#64B5F6")
+            } else {
+                TunnelLogger.log("Profil: ${config.profileName} | Metode: ${config.method} (${config.sessions} sesi)", "#64B5F6")
+            }
 
-            val coreCmd = arrayOf(
+            val coreCmd = if (isV2Ray) {
+                val parsed = V2RayConfigBuilder.build(config.v2rayLink, config.v2rayBug, config.v2rayHost, localSocksPort)
+                val cfgFile = File(cacheDir, "xray_active.json")
+                cfgFile.writeText(parsed.fullConfigJson)
+                arrayOf("$nativeDir/libsshcore.so", "-xraybin", "$nativeDir/libxray.so", "-xraycfg", cfgFile.absolutePath, "-tunbin", "$nativeDir/libtun2socks.so", "-tunsock", tunSockName, "-ctrlsock", controlSock, "-socks", "127.0.0.1:$localSocksPort")
+            } else arrayOf(
                 "$nativeDir/libsshcore.so",
                 "-dnstt", "$nativeDir/libdnstt.so",
                 "-tunbin", "$nativeDir/libtun2socks.so",
