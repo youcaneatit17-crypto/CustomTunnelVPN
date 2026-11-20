@@ -202,8 +202,8 @@ object V2RayConfigBuilder {
                 if (cleanHost.isNotEmpty()) {
                     stream.optJSONObject("realitySettings")?.put("serverName", cleanHost)
                     stream.optJSONObject("wsSettings")?.let { ws ->
-                        val hdrs = ws.optJSONObject("headers") ?: JSONObject().also { ws.put("headers", it) }
-                        hdrs.put("Host", cleanHost)
+                        ws.put("host", cleanHost)
+                        ws.optJSONObject("headers")?.remove("Host")
                     }
                     stream.optJSONObject("httpupgradeSettings")?.put("host", cleanHost)
                     stream.optJSONObject("xhttpSettings")?.put("host", cleanHost)
@@ -272,7 +272,9 @@ object V2RayConfigBuilder {
             "ws" -> {
                 val ws = stream.optJSONObject("wsSettings")
                 path = ws?.optString("path", "/") ?: "/"
-                host = ws?.optJSONObject("headers")?.optString("Host", "") ?: ""
+                host = ws?.optString("host", "")
+                    ?.ifEmpty { ws.optJSONObject("headers")?.optString("Host", "") ?: "" }
+                    ?: ""
             }
             "httpupgrade" -> {
                 val hu = stream.optJSONObject("httpupgradeSettings")
@@ -368,7 +370,7 @@ object V2RayConfigBuilder {
         when (normNet) {
             "ws" -> {
                 val ws = JSONObject().put("path", path.ifEmpty { "/" })
-                if (host.isNotEmpty()) ws.put("headers", JSONObject().put("Host", host))
+                if (host.isNotEmpty()) ws.put("host", host)
                 stream.put("wsSettings", ws)
             }
             "httpupgrade" -> {
