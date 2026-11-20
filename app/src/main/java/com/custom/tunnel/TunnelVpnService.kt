@@ -136,7 +136,7 @@ class TunnelVpnService : VpnService() {
         TunnelLogger.log(reason, "#64B5F6")
         connectionState = STATE_CONNECTING
         tunnelJob?.cancel()
-        cleanupAllResources()
+        cleanupCoreProcessOnly()
         lastConfig?.let { startSupervisorLoop(it) }
     }
 
@@ -170,7 +170,7 @@ class TunnelVpnService : VpnService() {
                 if (!shouldKeepRunning) break
 
                 val sessionCleanExit = runSingleTunnelSession(config)
-                cleanupAllResources()
+                cleanupCoreProcessOnly()
 
                 if (!shouldKeepRunning) break
 
@@ -249,7 +249,14 @@ class TunnelVpnService : VpnService() {
                             if (msg == "READY_CONNECTED") {
                                 connectedDeferred.complete(true)
                             } else {
-                                TunnelLogger.log(msg, "#90CAF9")
+                                val lower = msg.lowercase()
+                                val color = when {
+                                    lower.contains("error") || lower.contains("fatal") || lower.contains("failed") ||
+                                        lower.contains("panic") || lower.contains("rejected") || lower.contains("refused") -> "#EF5350"
+                                    lower.contains("warn") || lower.contains("timeout") -> "#FFB74D"
+                                    else -> "#90CAF9"
+                                }
+                                TunnelLogger.log(msg, color)
                             }
                         }
                     }
@@ -268,7 +275,8 @@ class TunnelVpnService : VpnService() {
 
             val isConnected = withTimeoutOrNull(handshakeTimeoutMs) { connectedDeferred.await() } ?: false
             if (!isConnected) {
-                throw IllegalStateException("Handshake SSH/${config.method} gagal atau timeout")
+                val protoLabel = if (isV2Ray) "V2Ray (${config.method})" else "SSH/${config.method}"
+                throw IllegalStateException("Handshake $protoLabel gagal atau timeout")
             }
 
             val pfd = vpnInterface ?: Builder().apply {
@@ -333,10 +341,13 @@ class TunnelVpnService : VpnService() {
                 clientSocket.outputStream.flush()
             }
 
+            connectionState = STATE_CONNECTED
             wasConnected = true
             updateNotification("Terhubung • ${config.profileName}")
             TunnelLogger.log("TUN aktif (10.0.0.2/24, MTU $vpnMtu) -> SOCKS5 127.0.0.1:$localSocksPort", "#4ADE80")
-            TunnelLogger.log("Relay UDPGW aktif -> 127.0.0.1:${config.udpgwPort.ifEmpty { "7300" }}", "#4ADE80")
+            if (!isV2Ray) {
+                TunnelLogger.log("Relay UDPGW aktif -> 127.0.0.1:${config.udpgwPort.ifEmpty { "7300" }}", "#4ADE80")
+            }
 
             pingJob = launch {
                 val socksProxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localSocksPort))
@@ -447,22 +458,29 @@ class TunnelVpnService : VpnService() {
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     val newHandle = network.networkHandle
-                    if (activeNetworkHandle == -1L) { activeNetworkHandle = newHandle; return }
-                    if (newHandle == activeNetworkHandle) return
+                    if (activeNetworkHandle == newHandle) return
+                    val hadNetwork = activeNetworkHandle != -1L
                     activeNetworkHandle = newHandle
+                    if (!hadNetwork) return
                     networkDebounceJob?.cancel()
                     networkDebounceJob = serviceScope.launch {
-                        delay(1200)
-                        if (shouldKeepRunning) {
-                            triggerRestartNow("Jaringan berubah, memulai ulang koneksi...")
+                        delay(1500)
+                        if (shouldKeepRunning && isNetworkAvailable()) {
+                            triggerRestartNow("Jaringan berubah, menyambung ulang...")
                         }
                     }
                 }
 
                 override fun onLost(network: Network) {
-                    if (network.networkHandle == activeNetworkHandle) activeNetworkHandle = -1L
-                    if (shouldKeepRunning) {
-                        triggerRestartNow("Jaringan terputus, memulai ulang koneksi...")
+                    if (network.networkHandle == activeNetworkHandle) {
+                        activeNetworkHandle = -1L
+                    }
+                    networkDebounceJob?.cancel()
+                    networkDebounceJob = serviceScope.launch {
+                        delay(1500)
+                        if (shouldKeepRunning && !isNetworkAvailable()) {
+                            triggerRestartNow("Jaringan terputus, menunggu koneksi...")
+                        }
                     }
                 }
             }
@@ -483,17 +501,28 @@ class TunnelVpnService : VpnService() {
         networkCallback = null
     }
 
+    @Synchronized
     private fun cleanupCoreProcessOnly() {
         ctrlSockName = null
-        try {
-            coreProcess?.destroy()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (coreProcess?.waitFor(400, TimeUnit.MILLISECONDS) == false) {
-                    coreProcess?.destroyForcibly()
-                }
-            }
-        } catch (_: Exception) {}
+        val proc = coreProcess
         coreProcess = null
+        if (proc != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    proc.descendants().forEach { child ->
+                        try { child.destroyForcibly() } catch (_: Exception) {}
+                    }
+                }
+                proc.destroy()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (!proc.waitFor(350, TimeUnit.MILLISECONDS)) {
+                        proc.destroyForcibly()
+                    }
+                } else {
+                    proc.destroyForcibly()
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     private fun cleanupAllResources() {
