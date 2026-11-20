@@ -71,6 +71,27 @@
                 android:textColor="#F3F4F6"
                 android:textSize="26sp"
                 android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btnV2RayPaste"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_action_copy"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/btnV2RayToggleJson"
+                android:layout_width="42dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:fontFamily="monospace"
+                android:gravity="center"
+                android:text="&lt;&gt;"
+                android:textColor="#E5E7EB"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- TOP BAR PENGATURAN (SUB-HALAMAN DENGAN PANAH BACK BERSIH) -->
@@ -1147,6 +1168,448 @@
                                     android:textColor="#F3F4F6"
                                     android:textColorHint="#6B7280"
                                     android:textSize="13sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- CONTAINER EDITOR V2RAY -->
+                    <LinearLayout
+                        android:id="@+id/layoutV2RayContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <!-- MODE FORM V2RAY -->
+                        <LinearLayout
+                            android:id="@+id/layoutV2RayFormMode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <!-- KARTU SERVER -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                android:background="@drawable/bg_card"
+                                android:orientation="vertical"
+                                android:padding="14dp">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:drawableStart="@drawable/ic_globe"
+                                    android:drawablePadding="8dp"
+                                    android:gravity="center_vertical"
+                                    android:text="Server"
+                                    android:textColor="#F3F4F6"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:scrollbars="none">
+
+                                    <LinearLayout
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal">
+
+                                        <Button
+                                            android:id="@+id/btnV2ProtoVmess"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#2C3545"
+                                            android:text="✓ VMess"
+                                            android:textAllCaps="false"
+                                            android:textColor="#FFFFFF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2ProtoVless"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="VLESS"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2ProtoTrojan"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="Trojan"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2ProtoSs"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="Shadowsocks"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+                                    </LinearLayout>
+                                </HorizontalScrollView>
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="Alamat server:port"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayAddrPort"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="104.18.1.196:443"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="6dp"
+                                    android:text="Gunakan host:port, contoh v2ray.example.com:443 atau [2001:db8::1]:443"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <!-- KARTU AKUN -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                android:background="@drawable/bg_card"
+                                android:orientation="vertical"
+                                android:padding="14dp">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:drawableStart="@drawable/ic_key"
+                                    android:drawablePadding="8dp"
+                                    android:gravity="center_vertical"
+                                    android:text="Akun"
+                                    android:textColor="#F3F4F6"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvV2RayUuidLabel"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="UUID"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayUuid"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:layout_marginBottom="10dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="Keamanan"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <Spinner
+                                    android:id="@+id/spV2RaySecurity"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:layout_marginBottom="10dp"
+                                    android:background="@drawable/bg_input"
+                                    android:paddingHorizontal="12dp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="Flow / AlterID (Opsional)"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayFlow"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="0 atau xtls-rprx-vision"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+
+                            <!-- KARTU TRANSPORT -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_card"
+                                android:orientation="vertical"
+                                android:padding="14dp">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:drawableStart="@drawable/ic_tune"
+                                    android:drawablePadding="8dp"
+                                    android:gravity="center_vertical"
+                                    android:text="Transport"
+                                    android:textColor="#F3F4F6"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:scrollbars="none">
+
+                                    <LinearLayout
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal">
+
+                                        <Button
+                                            android:id="@+id/btnV2NetWs"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#2C3545"
+                                            android:text="✓ WebSocket"
+                                            android:textAllCaps="false"
+                                            android:textColor="#FFFFFF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2NetTcp"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="TCP"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2NetHu"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="HTTPUpgrade"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2NetXhttp"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:layout_marginEnd="8dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="XHTTP"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+
+                                        <Button
+                                            android:id="@+id/btnV2NetGrpc"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="36dp"
+                                            android:backgroundTint="#161B24"
+                                            android:text="gRPC"
+                                            android:textAllCaps="false"
+                                            android:textColor="#9CA3AF"
+                                            android:textSize="12sp" />
+                                    </LinearLayout>
+                                </HorizontalScrollView>
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="Path / ServiceName"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayPath"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:layout_marginBottom="10dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="/vmess"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="Host (Header)"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayHost"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:layout_marginBottom="10dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="bug.host.com"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="10dp"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <Button
+                                        android:id="@+id/btnV2RayTlsToggle"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="36dp"
+                                        android:layout_marginEnd="10dp"
+                                        android:backgroundTint="#161B24"
+                                        android:text="TLS: Off"
+                                        android:textAllCaps="false"
+                                        android:textColor="#9CA3AF"
+                                        android:textSize="12sp" />
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="Aktifkan TLS / SNI di bawah"
+                                        android:textColor="#9CA3AF"
+                                        android:textSize="11sp" />
+                                </LinearLayout>
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="SNI (Server Name Indication)"
+                                    android:textColor="#9CA3AF"
+                                    android:textSize="11sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RaySni"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="46dp"
+                                    android:background="@drawable/bg_input"
+                                    android:fontFamily="monospace"
+                                    android:hint="sni.domain.com"
+                                    android:paddingHorizontal="12dp"
+                                    android:singleLine="true"
+                                    android:textColor="#F3F4F6"
+                                    android:textColorHint="#6B7280"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- MODE EDITOR JSON BERNOMOR BARIS -->
+                        <LinearLayout
+                            android:id="@+id/layoutV2RayJsonMode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_card"
+                            android:orientation="vertical"
+                            android:padding="14dp"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:drawableStart="@drawable/ic_file"
+                                android:drawablePadding="8dp"
+                                android:gravity="center_vertical"
+                                android:text="Editor JSON"
+                                android:textColor="#F3F4F6"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_input"
+                                android:orientation="horizontal"
+                                android:padding="10dp">
+
+                                <TextView
+                                    android:id="@+id/tvJsonLineNumbers"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:fontFamily="monospace"
+                                    android:gravity="end"
+                                    android:lineSpacingExtra="2dp"
+                                    android:paddingEnd="8dp"
+                                    android:text=" 1 |"
+                                    android:textColor="#6B7280"
+                                    android:textSize="12sp" />
+
+                                <EditText
+                                    android:id="@+id/etV2RayJsonEditor"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:background="@android:color/transparent"
+                                    android:fontFamily="monospace"
+                                    android:gravity="top|start"
+                                    android:inputType="textMultiLine|textNoSuggestions"
+                                    android:lineSpacingExtra="2dp"
+                                    android:minLines="16"
+                                    android:textColor="#F3F4F6"
+                                    android:textSize="12sp" />
                             </LinearLayout>
                         </LinearLayout>
                     </LinearLayout>

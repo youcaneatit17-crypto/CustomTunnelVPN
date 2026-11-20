@@ -175,6 +175,133 @@ object V2RayConfigBuilder {
         return ParsedV2Ray(remarks, summary, fullConfig.toString(2))
     }
 
+    data class EditableV2Ray(
+        val remarks: String = "V2Ray",
+        val protocol: String = "vmess",
+        val addressPort: String = "",
+        val uuid: String = "",
+        val security: String = "auto",
+        val flow: String = "",
+        val network: String = "ws",
+        val path: String = "/",
+        val host: String = "",
+        val tls: Boolean = false,
+        val sni: String = ""
+    )
+
+    fun parseToEditable(rawInput: String): EditableV2Ray {
+        val parsed = build(rawInput)
+        val root = JSONObject(parsed.fullConfigJson)
+        val out = root.optJSONArray("outbounds")?.optJSONObject(0) ?: JSONObject()
+        val proto = out.optString("protocol", "vmess").lowercase()
+        val settings = out.optJSONObject("settings") ?: JSONObject()
+
+        var addr = ""
+        var port = 443
+        var uuid = ""
+        var sec = "auto"
+        var flow = ""
+
+        val vnext = settings.optJSONArray("vnext")?.optJSONObject(0)
+        val srv = settings.optJSONArray("servers")?.optJSONObject(0)
+        if (vnext != null) {
+            addr = vnext.optString("address", "")
+            port = vnext.optInt("port", 443)
+            val u = vnext.optJSONArray("users")?.optJSONObject(0)
+            if (u != null) {
+                uuid = u.optString("id", "")
+                sec = if (proto == "vless") u.optString("encryption", "none") else u.optString("security", "auto")
+                flow = u.optString("flow", "").ifEmpty { u.optInt("alterId", 0).takeIf { it > 0 }?.toString() ?: "" }
+            }
+        } else if (srv != null) {
+            addr = srv.optString("address", "")
+            port = srv.optInt("port", 443)
+            uuid = srv.optString("password", "")
+            sec = srv.optString("method", "auto")
+        }
+
+        val stream = out.optJSONObject("streamSettings") ?: JSONObject()
+        val net = stream.optString("network", "ws").lowercase()
+        val secType = stream.optString("security", "none").lowercase()
+        val isTls = secType == "tls" || secType == "reality"
+
+        var path = "/"
+        var host = ""
+        when (net) {
+            "ws" -> {
+                val ws = stream.optJSONObject("wsSettings")
+                path = ws?.optString("path", "/") ?: "/"
+                host = ws?.optJSONObject("headers")?.optString("Host", "") ?: ""
+            }
+            "httpupgrade" -> {
+                val hu = stream.optJSONObject("httpupgradeSettings")
+                path = hu?.optString("path", "/") ?: "/"
+                host = hu?.optString("host", "") ?: ""
+            }
+            "xhttp" -> {
+                val xh = stream.optJSONObject("xhttpSettings")
+                path = xh?.optString("path", "/") ?: "/"
+                host = xh?.optString("host", "") ?: ""
+            }
+            "grpc" -> {
+                path = stream.optJSONObject("grpcSettings")?.optString("serviceName", "") ?: ""
+            }
+        }
+
+        val sni = stream.optJSONObject("tlsSettings")?.optString("serverName", "")
+            ?.ifEmpty { stream.optJSONObject("realitySettings")?.optString("serverName", "") ?: "" }
+            ?: ""
+
+        val addrPort = if (addr.isNotEmpty()) "$addr:$port" else ""
+        return EditableV2Ray(parsed.remarks, proto, addrPort, uuid, sec, flow, net, path, host, isTls, sni)
+    }
+
+    fun buildOutboundJsonFromEditable(e: EditableV2Ray): String {
+        val rawAp = e.addressPort.trim()
+        val hostPart: String
+        val portPart: Int
+        if (rawAp.startsWith("[")) {
+            hostPart = rawAp.substringBefore("]").removePrefix("[")
+            portPart = rawAp.substringAfter("]:", "443").toIntOrNull() ?: 443
+        } else if (rawAp.contains(":")) {
+            hostPart = rawAp.substringBeforeLast(":")
+            portPart = rawAp.substringAfterLast(":").toIntOrNull() ?: 443
+        } else {
+            hostPart = rawAp
+            portPart = 443
+        }
+
+        val proto = e.protocol.lowercase()
+        val outbound = JSONObject().put("tag", "proxy").put("protocol", proto)
+
+        when (proto) {
+            "vmess" -> {
+                val u = JSONObject().put("id", e.uuid.trim()).put("alterId", e.flow.trim().toIntOrNull() ?: 0).put("security", e.security.ifEmpty { "auto" })
+                outbound.put("settings", JSONObject().put("vnext", JSONArray().put(JSONObject().put("address", hostPart).put("port", portPart).put("users", JSONArray().put(u)))))
+            }
+            "vless" -> {
+                val u = JSONObject().put("id", e.uuid.trim()).put("encryption", "none")
+                if (e.flow.trim().isNotEmpty() && e.flow.trim() != "0") u.put("flow", e.flow.trim())
+                outbound.put("settings", JSONObject().put("vnext", JSONArray().put(JSONObject().put("address", hostPart).put("port", portPart).put("users", JSONArray().put(u)))))
+            }
+            "trojan" -> {
+                val s = JSONObject().put("address", hostPart).put("port", portPart).put("password", e.uuid.trim())
+                outbound.put("settings", JSONObject().put("servers", JSONArray().put(s)))
+            }
+            "shadowsocks" -> {
+                val s = JSONObject().put("address", hostPart).put("port", portPart).put("method", e.security.ifEmpty { "aes-128-gcm" }).put("password", e.uuid.trim())
+                outbound.put("settings", JSONObject().put("servers", JSONArray().put(s)))
+            }
+        }
+
+        val net = e.network.lowercase()
+        val secStr = if (e.tls) "tls" else "none"
+        val sniVal = e.sni.trim().ifEmpty { e.host.trim().ifEmpty { hostPart } }
+        outbound.put("streamSettings", buildStreamSettings(net, "none", e.host.trim(), e.path.trim(), secStr, sniVal, "", "chrome", "", ""))
+
+        return JSONObject().put("outbounds", JSONArray().put(outbound)).toString(2)
+    }
+
     private fun wrapOutboundInFullConfig(proxyOutbound: JSONObject): JSONObject {
         val outbounds = JSONArray().apply {
             put(proxyOutbound)
